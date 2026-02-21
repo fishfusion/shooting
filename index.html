@@ -540,6 +540,9 @@
                 state.gameOverText = `游戏结束：${target.portrait.name} 被击倒`;
                 state.drag.active = false;
                 target.dead = true;
+                // 击毁后立即进入可见下落状态
+                target.vx = target.vx - j * nx * invTar * 0.6;
+                target.vy = Math.min(-7.2, target.vy - Math.abs(j * ny * invTar) - 2.4);
                 target.vz = -j * nz * invTar;
                 state.announceSrc = target.portrait.src;
                 state.announceName = target.portrait.name;
