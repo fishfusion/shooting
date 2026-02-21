@@ -1135,7 +1135,7 @@
           if (!state.targetTalkPool.length) state.targetTalkPool = shuffled(TARGET_TALK_LINES);
           const z = zs[i];
           const near01 = (farZ - z) / (farZ - nearZ);
-          const maxHp = Math.round((70 + near01 * 90) * 1.5 * 0.75 * 1.2);
+          const maxHp = Math.round((70 + near01 * 90) * 1.5 * 0.75 * 1.2 * 1.25);
           state.targets.push({
             baseX: xs[i],
             baseY: ys[i],
