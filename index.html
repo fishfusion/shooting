@@ -93,10 +93,16 @@
         targetGravity: -5,
       };
       const cam = { x: 0, y: 3.8, z: -16, focal: 1300, near: 0.25 };
-      const lights = [
-        { pos: { x: -8.5, y: 8.8, z: 8 }, color: [1.0, 0.95, 0.88], intensity: 1.0 },
-        { pos: { x: 8.5, y: 8.8, z: 8 }, color: [0.88, 0.93, 1.0], intensity: 1.0 },
-      ];
+      const directionalLight = {
+        // 往右前下方照射: (+x, -y, +z)
+        dir: normalize3(0.9, -1.1, 1.0),
+        color: [1.0, 0.96, 0.9],
+        intensity: 1.18,
+      };
+      const ambientLight = {
+        color: [0.48, 0.56, 0.68],
+        intensity: 0.18,
+      };
 
       const state = {
         screenW: 0,
@@ -465,25 +471,19 @@
       function shadeBlinn(pos, normal, base) {
         const n = normalize3(normal.x, normal.y, normal.z);
         const vdir = normalize3(cam.x - pos.x, cam.y - pos.y, cam.z - pos.z);
-        let r = base[0] * 0.2;
-        let g = base[1] * 0.2;
-        let b = base[2] * 0.2;
+        const ldir = normalize3(-directionalLight.dir.x, -directionalLight.dir.y, -directionalLight.dir.z);
+        const ndotl = Math.max(0, n.x * ldir.x + n.y * ldir.y + n.z * ldir.z);
+        const h = normalize3(ldir.x + vdir.x, ldir.y + vdir.y, ldir.z + vdir.z);
+        const ndoth = Math.max(0, n.x * h.x + n.y * h.y + n.z * h.z);
+        const diff = ndotl * directionalLight.intensity;
+        const spec = Math.pow(ndoth, 28) * 0.55;
 
-        for (const l of lights) {
-          const ldir = normalize3(l.pos.x - pos.x, l.pos.y - pos.y, l.pos.z - pos.z);
-          const ndotl = Math.max(0, n.x * ldir.x + n.y * ldir.y + n.z * ldir.z);
-          const hx = ldir.x + vdir.x;
-          const hy = ldir.y + vdir.y;
-          const hz = ldir.z + vdir.z;
-          const h = normalize3(hx, hy, hz);
-          const ndoth = Math.max(0, n.x * h.x + n.y * h.y + n.z * h.z);
-          const spec = Math.pow(ndoth, 28) * 0.55;
-          const diff = ndotl * l.intensity;
-
-          r += l.color[0] * (base[0] * diff + spec);
-          g += l.color[1] * (base[1] * diff + spec);
-          b += l.color[2] * (base[2] * diff + spec);
-        }
+        let r = base[0] * ambientLight.color[0] * ambientLight.intensity;
+        let g = base[1] * ambientLight.color[1] * ambientLight.intensity;
+        let b = base[2] * ambientLight.color[2] * ambientLight.intensity;
+        r += directionalLight.color[0] * (base[0] * diff + spec);
+        g += directionalLight.color[1] * (base[1] * diff + spec);
+        b += directionalLight.color[2] * (base[2] * diff + spec);
         return [Math.min(1, r), Math.min(1, g), Math.min(1, b)];
       }
 
@@ -491,25 +491,22 @@
         const n = normalize3(normal.x, normal.y, normal.z);
         const v = normalize3(cam.x - pos.x, cam.y - pos.y, cam.z - pos.z);
         const nv = Math.max(0.0001, dot3(n, v));
-        let r = base[0] * 0.17;
-        let g = base[1] * 0.17;
-        let b = base[2] * 0.17;
-
-        for (const l of lights) {
-          const lv = normalize3(l.pos.x - pos.x, l.pos.y - pos.y, l.pos.z - pos.z);
-          const nl = Math.max(0.0001, dot3(n, lv));
-          const h = normalize3(lv.x + v.x, lv.y + v.y, lv.z + v.z);
-          const nh = Math.max(0.0001, dot3(n, h));
-          const theta = Math.acos(Math.min(1, nh));
-          const tanTheta = Math.tan(theta);
-          const a2 = roughness * roughness;
-          const ward = Math.exp(-(tanTheta * tanTheta) / a2) / (4 * Math.PI * a2 * Math.sqrt(nl * nv));
-          const diff = nl * l.intensity;
-          const spec = ward * 0.75;
-          r += l.color[0] * (base[0] * diff + spec);
-          g += l.color[1] * (base[1] * diff + spec);
-          b += l.color[2] * (base[2] * diff + spec);
-        }
+        const lv = normalize3(-directionalLight.dir.x, -directionalLight.dir.y, -directionalLight.dir.z);
+        const nl = Math.max(0.0001, dot3(n, lv));
+        const h = normalize3(lv.x + v.x, lv.y + v.y, lv.z + v.z);
+        const nh = Math.max(0.0001, dot3(n, h));
+        const theta = Math.acos(Math.min(1, nh));
+        const tanTheta = Math.tan(theta);
+        const a2 = roughness * roughness;
+        const ward = Math.exp(-(tanTheta * tanTheta) / a2) / (4 * Math.PI * a2 * Math.sqrt(nl * nv));
+        const diff = nl * directionalLight.intensity;
+        const spec = ward * 0.75;
+        let r = base[0] * ambientLight.color[0] * ambientLight.intensity;
+        let g = base[1] * ambientLight.color[1] * ambientLight.intensity;
+        let b = base[2] * ambientLight.color[2] * ambientLight.intensity;
+        r += directionalLight.color[0] * (base[0] * diff + spec);
+        g += directionalLight.color[1] * (base[1] * diff + spec);
+        b += directionalLight.color[2] * (base[2] * diff + spec);
         return [Math.min(1, r), Math.min(1, g), Math.min(1, b)];
       }
 
@@ -594,7 +591,7 @@
       function getAimShot() {
         const cosP = Math.cos(state.aim.pitch);
         const dir = normalize3(Math.sin(state.aim.yaw) * cosP, Math.sin(state.aim.pitch), Math.cos(state.aim.yaw) * cosP);
-        const speed = 20 + state.aim.power * 28;
+        const speed = 28 + state.aim.power * 36;
         return { dir, speed };
       }
 
@@ -730,19 +727,15 @@
 
       function shadeGround(pos, base) {
         const n = { x: 0, y: 1, z: 0 };
-        let r = base[0] * 0.34;
-        let g = base[1] * 0.34;
-        let b = base[2] * 0.34;
-        for (const l of lights) {
-          const ldir = normalize3(l.pos.x - pos.x, l.pos.y - pos.y, l.pos.z - pos.z);
-          const ndotl = Math.max(0, dot3(n, ldir));
-          const dist = Math.hypot(l.pos.x - pos.x, l.pos.y - pos.y, l.pos.z - pos.z);
-          const atten = 1 / (1 + 0.04 * dist * dist);
-          const diff = ndotl * atten * 3.2;
-          r += l.color[0] * base[0] * diff;
-          g += l.color[1] * base[1] * diff;
-          b += l.color[2] * base[2] * diff;
-        }
+        const ldir = normalize3(-directionalLight.dir.x, -directionalLight.dir.y, -directionalLight.dir.z);
+        const ndotl = Math.max(0, dot3(n, ldir));
+        const diff = ndotl * directionalLight.intensity * 1.15;
+        let r = base[0] * ambientLight.color[0] * ambientLight.intensity;
+        let g = base[1] * ambientLight.color[1] * ambientLight.intensity;
+        let b = base[2] * ambientLight.color[2] * ambientLight.intensity;
+        r += directionalLight.color[0] * base[0] * diff;
+        g += directionalLight.color[1] * base[1] * diff;
+        b += directionalLight.color[2] * base[2] * diff;
         const fog = clamp((pos.z - 4) / 36, 0, 1);
         r = r * (1 - fog * 0.35) + 0.62 * fog * 0.35;
         g = g * (1 - fog * 0.35) + 0.7 * fog * 0.35;
@@ -792,30 +785,15 @@
         }
       }
 
-      function projectShadowToGround(lightPos, objPos) {
-        const den = objPos.y - lightPos.y;
-        if (Math.abs(den) < 0.0001) return null;
-        const t = (0 - lightPos.y) / den;
-        if (t <= 0) return null;
-        return {
-          x: lightPos.x + (objPos.x - lightPos.x) * t,
-          y: 0,
-          z: lightPos.z + (objPos.z - lightPos.z) * t,
-        };
-      }
-
       function drawTargetShadows(tris, target) {
-        for (let i = 0; i < lights.length; i++) {
-          const l = lights[i];
-          const shW = projectShadowToGround(l.pos, { x: target.x, y: target.y, z: target.z });
-          if (!shW) continue;
-          const sh = worldToScreen(shW.x, 0.02, shW.z);
-          if (!sh.ok) continue;
-          const distY = Math.max(0.6, target.y);
-          const shadowR = target.r * sh.scale * 180 * (1.2 + distY * 0.2);
-          const alpha = 0.16 / (1 + i * 0.25);
-          circle(tris, sh.sx, sh.sy, shadowR, [0.05, 0.06, 0.08, alpha], 18);
-        }
+        const ldir = normalize3(directionalLight.dir.x, directionalLight.dir.y, directionalLight.dir.z);
+        const t = target.y / Math.max(0.0001, -ldir.y);
+        const shW = { x: target.x + ldir.x * t, y: 0, z: target.z + ldir.z * t };
+        const sh = worldToScreen(shW.x, 0.02, shW.z);
+        if (!sh.ok) return;
+        const distY = Math.max(0.6, target.y);
+        const shadowR = target.r * sh.scale * 180 * (1.2 + distY * 0.22);
+        circle(tris, sh.sx, sh.sy, shadowR, [0.05, 0.06, 0.08, 0.22], 20);
       }
 
       function render() {
@@ -864,11 +842,9 @@
         drawGunModel(tris);
         drawAimParabolaDashed(lines);
 
-        // 左右两个挂灯可视化
-        const lampL = worldToScreen(lights[0].pos.x, lights[0].pos.y, lights[0].pos.z);
-        const lampR = worldToScreen(lights[1].pos.x, lights[1].pos.y, lights[1].pos.z);
-        if (lampL.ok) circle(tris, lampL.sx, lampL.sy, 10, [1.0, 0.92, 0.78], 16);
-        if (lampR.ok) circle(tris, lampR.sx, lampR.sy, 10, [0.78, 0.88, 1.0], 16);
+        // 定向光方向小指示
+        const lightTip = worldToScreen(6.8, 7.3, 13);
+        if (lightTip.ok) line(lines, lightTip.sx - 26, lightTip.sy - 20, lightTip.sx, lightTip.sy, 3, [1.0, 0.95, 0.86, 0.72]);
 
         gl.clearColor(0.10, 0.14, 0.2, 1.0);
         gl.clear(gl.COLOR_BUFFER_BIT);
