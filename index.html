@@ -1101,12 +1101,32 @@
           const sx = state.view.x + c.sx * state.view.scale;
           const sy = state.view.y + c.sy * state.view.scale;
           const d = dDesign * state.view.scale;
+
+          // DOM 头像层默认会盖住 WebGL 球体。若前景球投影与圆盘重叠，则临时隐藏头像层。
+          let coveredByFrontBall = false;
+          for (const b of state.balls) {
+            if (!b.alive) continue;
+            if (b.z >= target.z - 0.05) continue;
+            const bs = worldToScreen(b.x, b.y, b.z);
+            if (!bs.ok) continue;
+            const bsx = state.view.x + bs.sx * state.view.scale;
+            const bsy = state.view.y + bs.sy * state.view.scale;
+            const br = b.r * bs.scale * 180 * state.view.scale;
+            const tr = d * 0.5;
+            const dx = bsx - sx;
+            const dy = bsy - sy;
+            if (dx * dx + dy * dy <= (br + tr) * (br + tr)) {
+              coveredByFrontBall = true;
+              break;
+            }
+          }
+
           el.style.display = "block";
           el.style.left = `${sx}px`;
           el.style.top = `${sy}px`;
           el.style.width = `${d}px`;
           el.style.height = `${d}px`;
-          el.style.opacity = target.dead ? "0.9" : "1";
+          el.style.opacity = coveredByFrontBall ? "0" : target.dead ? "0.9" : "1";
           const hp01 = target.maxHp > 0 ? target.hp / target.maxHp : 0;
           const tintAlpha = clamp((1 - hp01) * 0.38, 0, 0.38);
           const tintEl = el.querySelector(".tint");
