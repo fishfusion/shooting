@@ -649,6 +649,9 @@
         lastMissTauntLine: "",
         consecutiveMissShots: 0,
         targetTalkPool: [],
+        targetTalkActiveIndices: [],
+        targetTalkVisible: false,
+        targetTalkNextSwitch: 0,
         recentShotTs: [],
         nextRatePopupTime: 0,
         announceMode: "gameover",
@@ -974,6 +977,9 @@
         state.preparedMissTauntLine = "";
         state.missTauntPool = shuffled(MISS_TAUNT_LINES);
         state.targetTalkPool = shuffled(TARGET_TALK_LINES);
+        state.targetTalkActiveIndices = [];
+        state.targetTalkVisible = false;
+        state.targetTalkNextSwitch = 0;
         state.lastMissTauntLine = "";
         state.consecutiveMissShots = 0;
         state.nextRatePopupTime = 0;
@@ -2446,10 +2452,38 @@
         hud.textContent = state.gameOver ? state.gameOverText : "";
         renderTargetTalks();
       }
+      function pickTalkTargets() {
+        const alive = [];
+        for (let i = 0; i < state.targets.length; i++) {
+          if (state.targets[i] && !state.targets[i].dead) alive.push(i);
+        }
+        if (!alive.length) return [];
+        const count = alive.length > 1 && Math.random() < 0.35 ? 2 : 1;
+        const shuffledAlive = shuffled(alive);
+        return shuffledAlive.slice(0, Math.min(count, shuffledAlive.length));
+      }
+      function updateTargetTalkActivity(nowSec) {
+        if (nowSec < state.targetTalkNextSwitch) return;
+        if (!state.targetTalkVisible) {
+          state.targetTalkVisible = true;
+          state.targetTalkActiveIndices = pickTalkTargets();
+          state.targetTalkNextSwitch = nowSec + (1.0 + Math.random() * 0.9);
+        } else {
+          state.targetTalkVisible = false;
+          state.targetTalkActiveIndices = [];
+          state.targetTalkNextSwitch = nowSec + (1.0 + Math.random() * 0.9);
+        }
+      }
       function renderTargetTalks() {
         if (!targetTalkLayer) return;
+        updateTargetTalkActivity(performance.now() * 0.001);
         const talks = [];
-        for (const t of state.targets) {
+        if (!state.targetTalkVisible) {
+          targetTalkLayer.textContent = "";
+          return;
+        }
+        for (const i of state.targetTalkActiveIndices) {
+          const t = state.targets[i];
           if (!t || t.dead) continue;
           const s = worldToScreen(t.x, t.y + t.r + 0.52, t.z);
           if (!s.ok) continue;
