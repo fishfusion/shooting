@@ -494,6 +494,12 @@
             hp: maxHp,
             dead: false,
             vz: 0,
+            rotX: 0,
+            rotY: 0,
+            rotZ: 0,
+            avX: 0,
+            avY: 0,
+            avZ: 0,
             portrait: selectedPortraits[i],
           });
         }
@@ -605,15 +611,30 @@
             target.vx *= 0.996;
             target.vy *= 0.996;
             target.vz *= 0.996;
+            target.avX *= 0.992;
+            target.avY *= 0.992;
+            target.avZ *= 0.992;
             target.x += target.vx * dt;
             target.y += target.vy * dt;
             target.z += target.vz * dt;
+            target.rotX += target.avX * dt;
+            target.rotY += target.avY * dt;
+            target.rotZ += target.avZ * dt;
 
-            if (target.y - target.r < 0) {
-              target.y = target.r;
+            const support = targetSupportRadiusY(target);
+            if (target.y - support < 0) {
+              target.y = support;
               target.vy = Math.abs(target.vy) * 0.35;
-              target.vx *= 0.9;
-              target.vz *= 0.9;
+              target.vx *= 0.88;
+              target.vz *= 0.88;
+              target.avX += target.vz * 0.08;
+              target.avZ -= target.vx * 0.08;
+
+              const tilt = Math.hypot(target.rotX, target.rotZ);
+              if (tilt < 0.95) {
+                target.avX += (Math.sign(target.rotX || 1) * 1.1 + (Math.random() - 0.5) * 0.25) * dt * 60;
+                target.avZ += (Math.sign(target.rotZ || -1) * 1.1 + (Math.random() - 0.5) * 0.25) * dt * 60;
+              }
             }
           }
           target.hitTimer = Math.max(0, target.hitTimer - dt);
@@ -707,6 +728,9 @@
                 target.vx = target.vx - j * nx * invTar * 0.6;
                 target.vy = Math.min(0, target.vy - j * ny * invTar);
                 target.vz = -j * nz * invTar;
+                target.avX = (0.8 + Math.random() * 1.4) * (Math.random() > 0.5 ? 1 : -1) + target.vz * 0.05;
+                target.avY = (Math.random() - 0.5) * 1.2;
+                target.avZ = (0.8 + Math.random() * 1.4) * (Math.random() > 0.5 ? 1 : -1) - target.vx * 0.05;
                 state.announceSrc = target.portrait.src;
                 state.announceName = target.portrait.name;
                 showAnnouncement(target.portrait.src);
@@ -763,6 +787,49 @@
           y: a.z * b.x - a.x * b.z,
           z: a.x * b.y - a.y * b.x,
         };
+      }
+      function targetThickness(target) {
+        return Math.max(0.26, target.r * 0.42);
+      }
+      function rotateVecEuler(v, rotX, rotY, rotZ) {
+        const cx = Math.cos(rotX), sx = Math.sin(rotX);
+        const cy = Math.cos(rotY), sy = Math.sin(rotY);
+        const cz = Math.cos(rotZ), sz = Math.sin(rotZ);
+
+        const y1 = v.y * cx - v.z * sx;
+        const z1 = v.y * sx + v.z * cx;
+        const x1 = v.x;
+
+        const x2 = x1 * cz - y1 * sz;
+        const y2 = x1 * sz + y1 * cz;
+        const z2 = z1;
+
+        return {
+          x: x2 * cy + z2 * sy,
+          y: y2,
+          z: -x2 * sy + z2 * cy,
+        };
+      }
+      function targetRotateVec(target, v) {
+        return rotateVecEuler(v, target.rotX || 0, target.rotY || 0, target.rotZ || 0);
+      }
+      function targetLocalToWorld(target, lx, ly, lz) {
+        const p = targetRotateVec(target, { x: lx, y: ly, z: lz });
+        return { x: target.x + p.x, y: target.y + p.y, z: target.z + p.z };
+      }
+      function targetNormal(target) {
+        return normalize3(
+          targetRotateVec(target, { x: 0, y: 0, z: 1 }).x,
+          targetRotateVec(target, { x: 0, y: 0, z: 1 }).y,
+          targetRotateVec(target, { x: 0, y: 0, z: 1 }).z
+        );
+      }
+      function targetSupportRadiusY(target) {
+        const n = targetNormal(target);
+        const h = targetThickness(target) * 0.5;
+        const ring = target.r * Math.sqrt(Math.max(0, 1 - n.y * n.y));
+        const cap = h * Math.abs(n.y);
+        return ring + cap;
       }
 
       function identity4() {
@@ -1002,9 +1069,8 @@
 
       function addTargetGeometry(meshArr, target) {
         const seg = 36;
-        const thickness = Math.max(0.26, target.r * 0.42);
-        const zFront = target.z - thickness * 0.5;
-        const zBack = target.z + thickness * 0.5;
+        const thickness = targetThickness(target);
+        const half = thickness * 0.5;
         const hp01 = target.maxHp > 0 ? target.hp / target.maxHp : 0;
 
         const bodyCol = target.hitTimer > 0 ? [0.95, 0.45, 0.34, 1] : [0.72, 0.46 + hp01 * 0.14, 0.38 + hp01 * 0.1, 1];
@@ -1019,30 +1085,46 @@
           const nx1 = Math.cos(a1);
           const ny1 = Math.sin(a1);
 
-          const pF0 = { x: target.x + nx0 * target.r, y: target.y + ny0 * target.r, z: zFront };
-          const pF1 = { x: target.x + nx1 * target.r, y: target.y + ny1 * target.r, z: zFront };
-          const pB0 = { x: target.x + nx0 * target.r, y: target.y + ny0 * target.r, z: zBack };
-          const pB1 = { x: target.x + nx1 * target.r, y: target.y + ny1 * target.r, z: zBack };
-          const n0 = { x: nx0, y: ny0, z: 0 };
-          const n1 = { x: nx1, y: ny1, z: 0 };
+          const pF0 = targetLocalToWorld(target, nx0 * target.r, ny0 * target.r, -half);
+          const pF1 = targetLocalToWorld(target, nx1 * target.r, ny1 * target.r, -half);
+          const pB0 = targetLocalToWorld(target, nx0 * target.r, ny0 * target.r, half);
+          const pB1 = targetLocalToWorld(target, nx1 * target.r, ny1 * target.r, half);
+          const n0 = normalize3(
+            targetRotateVec(target, { x: nx0, y: ny0, z: 0 }).x,
+            targetRotateVec(target, { x: nx0, y: ny0, z: 0 }).y,
+            targetRotateVec(target, { x: nx0, y: ny0, z: 0 }).z
+          );
+          const n1 = normalize3(
+            targetRotateVec(target, { x: nx1, y: ny1, z: 0 }).x,
+            targetRotateVec(target, { x: nx1, y: ny1, z: 0 }).y,
+            targetRotateVec(target, { x: nx1, y: ny1, z: 0 }).z
+          );
           pushMeshQuad(meshArr, pF0, n0, sideCol, pB0, n0, sideCol, pB1, n1, sideCol, pF1, n1, sideCol);
 
-          const cBack = { x: target.x, y: target.y, z: zBack };
-          const nBack = { x: 0, y: 0, z: 1 };
+          const cBack = targetLocalToWorld(target, 0, 0, half);
+          const nBack = normalize3(
+            targetRotateVec(target, { x: 0, y: 0, z: 1 }).x,
+            targetRotateVec(target, { x: 0, y: 0, z: 1 }).y,
+            targetRotateVec(target, { x: 0, y: 0, z: 1 }).z
+          );
           pushMeshTri(meshArr, cBack, nBack, backCol, pB1, nBack, backCol, pB0, nBack, backCol);
         }
 
         const rimCol = [0.96, 0.96, 0.96, 1];
         const rimOuter = target.r * 1.05;
         const rimInner = target.r * 0.985;
-        const nRim = { x: 0, y: 0, z: -1 };
+        const nRim = normalize3(
+          targetRotateVec(target, { x: 0, y: 0, z: -1 }).x,
+          targetRotateVec(target, { x: 0, y: 0, z: -1 }).y,
+          targetRotateVec(target, { x: 0, y: 0, z: -1 }).z
+        );
         for (let i = 0; i < seg; i++) {
           const a0 = (i / seg) * Math.PI * 2;
           const a1 = ((i + 1) / seg) * Math.PI * 2;
-          const o0 = { x: target.x + Math.cos(a0) * rimOuter, y: target.y + Math.sin(a0) * rimOuter, z: zFront - 0.002 };
-          const o1 = { x: target.x + Math.cos(a1) * rimOuter, y: target.y + Math.sin(a1) * rimOuter, z: zFront - 0.002 };
-          const i0 = { x: target.x + Math.cos(a0) * rimInner, y: target.y + Math.sin(a0) * rimInner, z: zFront - 0.002 };
-          const i1 = { x: target.x + Math.cos(a1) * rimInner, y: target.y + Math.sin(a1) * rimInner, z: zFront - 0.002 };
+          const o0 = targetLocalToWorld(target, Math.cos(a0) * rimOuter, Math.sin(a0) * rimOuter, -half - 0.002);
+          const o1 = targetLocalToWorld(target, Math.cos(a1) * rimOuter, Math.sin(a1) * rimOuter, -half - 0.002);
+          const i0 = targetLocalToWorld(target, Math.cos(a0) * rimInner, Math.sin(a0) * rimInner, -half - 0.002);
+          const i1 = targetLocalToWorld(target, Math.cos(a1) * rimInner, Math.sin(a1) * rimInner, -half - 0.002);
           pushMeshQuad(meshArr, o0, nRim, rimCol, o1, nRim, rimCol, i1, nRim, rimCol, i0, nRim, rimCol);
         }
       }
@@ -1207,9 +1289,13 @@
 
         for (const t of texTargets) {
           const seg = 36;
-          const thickness = Math.max(0.26, t.r * 0.42);
-          const zFront = t.z - thickness * 0.5 - 0.001;
-          const n = { x: 0, y: 0, z: -1 };
+          const thickness = targetThickness(t);
+          const half = thickness * 0.5;
+          const n = normalize3(
+            targetRotateVec(t, { x: 0, y: 0, z: -1 }).x,
+            targetRotateVec(t, { x: 0, y: 0, z: -1 }).y,
+            targetRotateVec(t, { x: 0, y: 0, z: -1 }).z
+          );
           const verts = [];
           for (let i = 0; i < seg; i++) {
             const a0 = (i / seg) * Math.PI * 2;
@@ -1218,9 +1304,9 @@
             const y0 = Math.sin(a0);
             const x1 = Math.cos(a1);
             const y1 = Math.sin(a1);
-            const c = { x: t.x, y: t.y, z: zFront };
-            const p0 = { x: t.x + x0 * t.r, y: t.y + y0 * t.r, z: zFront };
-            const p1 = { x: t.x + x1 * t.r, y: t.y + y1 * t.r, z: zFront };
+            const c = targetLocalToWorld(t, 0, 0, -half - 0.001);
+            const p0 = targetLocalToWorld(t, x0 * t.r, y0 * t.r, -half - 0.001);
+            const p1 = targetLocalToWorld(t, x1 * t.r, y1 * t.r, -half - 0.001);
             pushTexTri(verts, c, n, [1, 1, 1, 1], [0.5, 0.5], p0, n, [1, 1, 1, 1], [0.5 + x0 * 0.5, 0.5 + y0 * 0.5], p1, n, [1, 1, 1, 1], [0.5 + x1 * 0.5, 0.5 + y1 * 0.5]);
           }
           gl.activeTexture(gl.TEXTURE0);
