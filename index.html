@@ -160,6 +160,39 @@
       const gl = canvas.getContext("webgl", { antialias: true, alpha: false });
       if (!gl) throw new Error("WebGL not supported");
       const isLikelyMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "") || (window.innerWidth <= 900 && "ontouchstart" in window);
+      const PERF = isLikelyMobile
+        ? {
+            dprCap: 1.1,
+            clothCols: 19,
+            clothRows: 20,
+            clothSubsteps: 3,
+            clothIterations: 4,
+            ballCcdSubsteps: 6,
+            aimSteps: 28,
+            ballSphereLat: 8,
+            ballSphereLon: 12,
+            fragmentSphereLat: 5,
+            fragmentSphereLon: 8,
+            targetDiscSeg: 24,
+            fragmentCount: 8,
+            maxActiveBalls: 14,
+          }
+        : {
+            dprCap: 2,
+            clothCols: 23,
+            clothRows: 24,
+            clothSubsteps: 4,
+            clothIterations: 6,
+            ballCcdSubsteps: 10,
+            aimSteps: 46,
+            ballSphereLat: 10,
+            ballSphereLon: 16,
+            fragmentSphereLat: 7,
+            fragmentSphereLon: 10,
+            targetDiscSeg: 36,
+            fragmentCount: 14,
+            maxActiveBalls: 999,
+          };
 
       const meshVS = `
         attribute vec3 a_pos;
@@ -351,10 +384,10 @@
         width: 18,
         height: 40,
         topY: 19,
-        cols: 23,
-        rows: 24,
-        substeps: 4,
-        iterations: 6,
+        cols: PERF.clothCols,
+        rows: PERF.clothRows,
+        substeps: PERF.clothSubsteps,
+        iterations: PERF.clothIterations,
         damping: 0.006,
         gravityScale: 2.2,
         stretchCompliance: 0.00006,
@@ -369,14 +402,9 @@
         collisionDetachSpeed: 0.0,
         collisionMaxOutSpeed: 0.0,
         timeStepScale: 1.8,
-        ballCcdSubsteps: 10,
+        ballCcdSubsteps: PERF.ballCcdSubsteps,
         topEdgeSag: 0.9,
       };
-      if (isLikelyMobile) {
-        clothSetup.substeps = 3;
-        clothSetup.iterations = 5;
-        clothSetup.ballCcdSubsteps = 8;
-      }
 
       const cam = {
         pos: { x: 0, y: 3.8, z: -16 },
@@ -630,7 +658,6 @@
         "rgba(255, 214, 130, 0.56)",
         "rgba(201, 255, 245, 0.56)",
       ];
-
       const state = {
         screenW: 0,
         screenH: 0,
@@ -948,7 +975,7 @@
       }
 
       function resize() {
-        const dprCap = isLikelyMobile ? 1.25 : 2;
+        const dprCap = PERF.dprCap;
         const dpr = Math.min(dprCap, window.devicePixelRatio || 1);
         state.screenW = window.innerWidth;
         state.screenH = window.innerHeight;
@@ -1293,6 +1320,15 @@
         if (segLen2 < 1e-8) return;
 
         const rr = ball.r + 0.16;
+        const minX = clothSetup.xMin - rr - 0.4;
+        const maxX = clothSetup.xMax + rr + 0.4;
+        const minY = clothSetup.groundY - rr - 0.25;
+        const maxY = clothSetup.topY + rr + 0.9;
+        const minZ = clothSetup.z - rr - 0.5;
+        const maxZ = clothSetup.z + clothSetup.initialReleaseDepth + rr + 0.8;
+        if ((sx < minX && ex < minX) || (sx > maxX && ex > maxX)) return;
+        if ((sy < minY && ey < minY) || (sy > maxY && ey > maxY)) return;
+        if ((sz < minZ && ez < minZ) || (sz > maxZ && ez > maxZ)) return;
         let hit = false;
         let bestT = 1;
         let hitNx = 0, hitNy = 0, hitNz = 0;
@@ -1475,6 +1511,11 @@
       }
 
       function spawnBall(x, y, z, vx, vy, vz) {
+        let activeCount = 0;
+        for (const b of state.balls) {
+          if (b && b.alive && !b.stopped) activeCount++;
+        }
+        if (activeCount >= PERF.maxActiveBalls) return;
         state.balls.push({ x, y, z, vx, vy, vz, r: 0.28, mass: 3.2, alive: true, stopped: false, hitCd: 0, hitTarget: false, missCounted: false });
       }
       function stopBall(ball) {
@@ -1485,7 +1526,7 @@
       }
 
       function spawnBallFragments(ball) {
-        const count = 14;
+        const count = PERF.fragmentCount;
         for (let i = 0; i < count; i++) {
           const dir = normalize3(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1);
           const speed = 3 + Math.random() * 6;
@@ -2266,7 +2307,7 @@
         let p = { x: pose.muzzle.x, y: pose.muzzle.y, z: pose.muzzle.z };
         let v3 = { x: shot.dir.x * shot.speed, y: shot.dir.y * shot.speed, z: shot.dir.z * shot.speed };
         const dt = 0.07;
-        const steps = 46;
+        const steps = PERF.aimSteps;
         const out = [];
         for (let i = 0; i < steps; i++) {
           const prev = { x: p.x, y: p.y, z: p.z };
@@ -2302,10 +2343,10 @@
 
         for (const b of state.balls) {
           if (!b.alive) continue;
-          addSphereMesh(meshVerts, { x: b.x, y: b.y, z: b.z }, b.r, [0.18, 0.22, 0.3, 1], 10, 16);
+          addSphereMesh(meshVerts, { x: b.x, y: b.y, z: b.z }, b.r, [0.18, 0.22, 0.3, 1], PERF.ballSphereLat, PERF.ballSphereLon);
         }
         for (const f of state.fragments) {
-          addSphereMesh(meshVerts, { x: f.x, y: f.y, z: f.z }, f.r, [0.2, 0.22, 0.28, 1], 7, 10);
+          addSphereMesh(meshVerts, { x: f.x, y: f.y, z: f.z }, f.r, [0.2, 0.22, 0.28, 1], PERF.fragmentSphereLat, PERF.fragmentSphereLon);
         }
 
         for (const t of state.targets) {
@@ -2382,7 +2423,7 @@
         gl.uniform1i(tex.uTex, 0);
 
         for (const t of texTargets) {
-          const seg = 36;
+          const seg = PERF.targetDiscSeg;
           const thickness = targetThickness(t);
           const half = thickness * 0.5;
           const n = normalize3(
