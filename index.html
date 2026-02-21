@@ -216,6 +216,16 @@
           img,
         };
       });
+      const OPENAI_API_URL = "https://api.openai.com/v1/responses";
+      const OPENAI_MODEL = "gpt-4.1-mini";
+      const FALLBACK_INVITE = "恭喜你，下周六叫上Leo来我家吃烧烤吧。";
+      const PHILOSOPHICAL_SEEDS = [
+        "人生像火候，要慢慢入味",
+        "关系的温度，来自一起吃饭",
+        "答案常在烟火气里",
+        "忙碌之外也要留白给朋友",
+        "快乐在分享里变大",
+      ];
 
       const state = {
         screenW: 0,
@@ -247,10 +257,43 @@
         }
         return a;
       }
-      function showAnnouncement(src) {
+      async function generatePhilosophicalInviteLine() {
+        const apiKey = localStorage.getItem("OPENAI_API_KEY");
+        if (!apiKey) return FALLBACK_INVITE;
+
+        const seed = PHILOSOPHICAL_SEEDS[Math.floor(Math.random() * PHILOSOPHICAL_SEEDS.length)];
+        const prompt = `写一句中文邀请语，必须保留核心意思：叫上Leo来我家吃烧烤。语气自然，有一点哲理，不要鸡汤，不要解释，只输出一句话。可参考意象：${seed}`;
+
+        try {
+          const res = await fetch(OPENAI_API_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: OPENAI_MODEL,
+              input: prompt,
+              temperature: 0.95,
+              max_output_tokens: 60,
+            }),
+          });
+          if (!res.ok) return FALLBACK_INVITE;
+          const data = await res.json();
+          const text = (data.output_text || "").trim();
+          if (!text) return FALLBACK_INVITE;
+          return text.replace(/^["'“”]+|["'“”]+$/g, "");
+        } catch (_err) {
+          return FALLBACK_INVITE;
+        }
+      }
+
+      async function showAnnouncement(src) {
         announceImg.src = src;
-        announceText.textContent = "恭喜你，下周六叫上Leo来我家吃烧烤吧。";
+        announceText.textContent = "正在生成邀请语...";
         announce.classList.add("show");
+        const line = await generatePhilosophicalInviteLine();
+        announceText.textContent = line || FALLBACK_INVITE;
       }
 
       function resize() {
