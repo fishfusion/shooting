@@ -299,6 +299,7 @@
         bendCompliance: 0.000012,
         tetherCompliance: 0.00001,
         groundY: 0.03,
+        floorReachSlack: 0.55,
         initialReleaseDepth: 14,
         collisionRestitution: 0.06,
         collisionTangentDamping: 0.9,
@@ -589,7 +590,7 @@
         const cols = clothSetup.cols;
         const rows = clothSetup.rows;
         const width = clothSetup.width;
-        const height = clothSetup.height;
+        const height = Math.max(clothSetup.height, clothSetup.topY - clothSetup.groundY + clothSetup.floorReachSlack);
         const dx = width / (cols - 1);
         const dy = height / (rows - 1);
         const nodes = new Array(cols * rows);
