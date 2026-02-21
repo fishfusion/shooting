@@ -286,7 +286,7 @@
         xMax: 9,
         z: 34.6,
         width: 18,
-        height: 20,
+        height: 28,
         topY: 19,
         cols: 23,
         rows: 47,
@@ -299,7 +299,6 @@
         bendCompliance: 0.0,
         tetherCompliance: 0.0,
         groundY: 0.03,
-        floorReachSlack: 4.2,
         initialReleaseDepth: 14,
         collisionRestitution: 0.0,
         collisionTangentDamping: 0.98,
@@ -592,7 +591,7 @@
         const cols = clothSetup.cols;
         const rows = clothSetup.rows;
         const width = clothSetup.width;
-        const height = Math.max(clothSetup.height, clothSetup.topY - clothSetup.groundY + clothSetup.floorReachSlack);
+        const height = clothSetup.height;
         const dx = width / (cols - 1);
         const dy = height / (rows - 1);
         const nodes = new Array(cols * rows);
