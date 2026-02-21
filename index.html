@@ -406,6 +406,8 @@
         ? "https://shooting-git-main-fishfusions-projects.vercel.app/api/invite"
         : "/api/invite";
       const BGM_NETWORK_SRCS = [
+        "Assets/GRAE.mp3",
+        "asserts/gare.mp3",
         "https://cdn.jsdelivr.net/gh/fishfusion/shooting@main/Assets/GRAE.mp3",
         "https://raw.githubusercontent.com/fishfusion/shooting/main/Assets/GRAE.mp3",
       ];
@@ -663,6 +665,8 @@
         if (isManual) {
           state.bgmRetryCount += 1;
           if (bgmBtn) bgmBtn.textContent = "音乐开启中...";
+          // iOS/Android 某些浏览器下，手动点击时重建 audio 更容易成功解锁声音。
+          state.bgmAudio = null;
         }
         if (!state.bgmAudio) {
           const src = BGM_NETWORK_SRCS[state.bgmSrcIndex] || BGM_NETWORK_SRCS[0];
