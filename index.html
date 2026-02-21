@@ -847,13 +847,24 @@
       }
 
       function drawAimParabolaDashed(lines) {
-        if (!state.drag.active) return;
+        const segments = getAimPathScreenSegments();
+        if (!segments.length) return;
+        for (let i = 0; i < segments.length; i++) {
+          if (i % 2 !== 0) continue;
+          const s = segments[i];
+          line(lines, s.x1, s.y1, s.x2, s.y2, 4, [1.0, 0.2, 0.2, 0.42]);
+        }
+      }
+
+      function getAimPathScreenSegments() {
+        if (!state.drag.active) return [];
         const shot = getAimShot();
         const pose = getGunPose();
         let p = { x: pose.muzzle.x, y: pose.muzzle.y, z: pose.muzzle.z };
         let v3 = { x: shot.dir.x * shot.speed, y: shot.dir.y * shot.speed, z: shot.dir.z * shot.speed };
         const dt = 0.07;
         const steps = 46;
+        const segments = [];
 
         for (let i = 0; i < steps; i++) {
           const prev = { x: p.x, y: p.y, z: p.z };
@@ -866,15 +877,32 @@
           p.z += v3.z * dt;
           if (p.y < 0) p.y = 0;
 
-          if (i % 2 === 0) {
-            const s0 = worldToScreen(prev.x, prev.y, prev.z);
-            const s1 = worldToScreen(p.x, p.y, p.z);
-            if (s0.ok && s1.ok) {
-              line(lines, s0.sx, s0.sy, s1.sx, s1.sy, 4, [1.0, 0.2, 0.2, 0.42]);
-            }
+          const s0 = worldToScreen(prev.x, prev.y, prev.z);
+          const s1 = worldToScreen(p.x, p.y, p.z);
+          if (s0.ok && s1.ok) {
+            segments.push({
+              x1: state.view.x + s0.sx * state.view.scale,
+              y1: state.view.y + s0.sy * state.view.scale,
+              x2: state.view.x + s1.sx * state.view.scale,
+              y2: state.view.y + s1.sy * state.view.scale,
+            });
           }
           if (p.y <= 0) break;
         }
+        return segments;
+      }
+
+      function circleSegmentOverlap(cx, cy, r, x1, y1, x2, y2) {
+        const vx = x2 - x1;
+        const vy = y2 - y1;
+        const len2 = vx * vx + vy * vy || 1;
+        let t = ((cx - x1) * vx + (cy - y1) * vy) / len2;
+        t = clamp(t, 0, 1);
+        const px = x1 + vx * t;
+        const py = y1 + vy * t;
+        const dx = cx - px;
+        const dy = cy - py;
+        return dx * dx + dy * dy <= r * r;
       }
 
       function drawLitDisk(arr, target, baseColor) {
@@ -1094,6 +1122,7 @@
       }
 
       function renderPortraits() {
+        const aimSegments = getAimPathScreenSegments();
         for (const target of state.targets) {
           const el = ensurePortraitElement(target);
           const c = worldToScreen(target.x, target.y, target.z);
@@ -1125,12 +1154,23 @@
             }
           }
 
+          let coveredByAimLine = false;
+          if (!coveredByFrontBall && aimSegments.length) {
+            const tr = d * 0.5;
+            for (const seg of aimSegments) {
+              if (circleSegmentOverlap(sx, sy, tr, seg.x1, seg.y1, seg.x2, seg.y2)) {
+                coveredByAimLine = true;
+                break;
+              }
+            }
+          }
+
           el.style.display = "block";
           el.style.left = `${sx}px`;
           el.style.top = `${sy}px`;
           el.style.width = `${d}px`;
           el.style.height = `${d}px`;
-          el.style.opacity = coveredByFrontBall ? "0" : target.dead ? "0.9" : "1";
+          el.style.opacity = coveredByFrontBall || coveredByAimLine ? "0" : target.dead ? "0.9" : "1";
           const hp01 = target.maxHp > 0 ? target.hp / target.maxHp : 0;
           const tintAlpha = clamp((1 - hp01) * 0.38, 0, 0.38);
           const tintEl = el.querySelector(".tint");
