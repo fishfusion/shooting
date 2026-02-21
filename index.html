@@ -445,6 +445,14 @@
         "明晚你先和Leo约好，下周末一起来我家吃烧烤，热闹会把疲惫吹散。",
         "这个周末你叫上Leo来我家吃烧烤，答案有时就藏在一桌人间烟火里。",
       ];
+      const INVITE_PHILOSOPHICAL_TAILS = [
+        "人与人的情分，往往就在一顿饭的烟火里慢慢长出来。",
+        "很多难说的话，坐在同一张桌前就有了温度。",
+        "人生的分量，不只在远方，也在一起举杯的当下。",
+        "真正能留下来的关系，常常是被一餐一饭认真喂养的。",
+        "热闹会散，但一起吃过的那份真心会一直在。",
+        "再忙的日子，也该给重要的人留一段同桌的时间。",
+      ];
       const FIRE_RATE_LIMIT = {
         windowSec: 0.5,
         maxShots: 1,
@@ -598,6 +606,13 @@
       function hasTimePhrase(text) {
         return /(下周[一二三四五六日天末]?|周[一二三四五六日天末]|周末|今晚|明晚|明天|后天|本周|这个周末|下个周末)/.test(text);
       }
+      function extendInviteLine(baseLine) {
+        const base = String(baseLine || "").trim();
+        if (!base) return base;
+        const withStop = /[。！？!?]$/.test(base) ? base : `${base}。`;
+        const tail = INVITE_PHILOSOPHICAL_TAILS[Math.floor(Math.random() * INVITE_PHILOSOPHICAL_TAILS.length)] || INVITE_PHILOSOPHICAL_TAILS[0];
+        return `${withStop}${tail}`;
+      }
 
       async function requestProxyLine(apiUrl, payload) {
         const res = await fetch(apiUrl, {
@@ -687,12 +702,12 @@
         }
         if (line.startsWith("__FALLBACK_INVITE__")) {
           const text = line.replace("__FALLBACK_INVITE__", "");
-          announceText.textContent = text;
+          announceText.textContent = extendInviteLine(text);
           primeInviteLine();
           return;
         }
         state.lastInviteLine = line;
-        announceText.textContent = line;
+        announceText.textContent = extendInviteLine(line);
         primeInviteLine();
       }
 
