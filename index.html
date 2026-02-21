@@ -286,8 +286,8 @@
         xMax: 9,
         z: 34.6,
         width: 18,
-        height: 36,
-        topY: 16,
+        height: 20,
+        topY: 19,
         cols: 23,
         rows: 47,
         substeps: 4,
@@ -297,6 +297,7 @@
         shearCompliance: 0.000003,
         bendCompliance: 0.000012,
         tetherCompliance: 0.0000006,
+        groundY: 0.03,
       };
 
       const cam = {
@@ -710,6 +711,18 @@
         }
       }
 
+      function solveClothGroundCollision() {
+        const cloth = state.cloth;
+        if (!cloth) return;
+        const gy = clothSetup.groundY;
+        for (const n of cloth.nodes) {
+          if (n.invMass <= 0) continue;
+          if (n.y < gy) {
+            n.y = gy;
+          }
+        }
+      }
+
       function updateCloth(dt) {
         const cloth = state.cloth;
         if (!cloth) return;
@@ -733,6 +746,7 @@
           for (let i = 0; i < clothSetup.iterations; i++) {
             solveClothConstraints(stepDt);
             solveClothBallCollision();
+            solveClothGroundCollision();
           }
         }
       }
