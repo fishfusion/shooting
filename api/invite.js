@@ -70,11 +70,19 @@ export default async function handler(req, res) {
 
   const body = await parseBody(req);
   const input = String((body && body.input) || "").trim();
+  const mode = String((body && body.mode) || "invite").trim();
   const lastInviteLine = String((body && body.lastInviteLine) || "").trim();
+  const lastWarningLine = String((body && body.lastWarningLine) || "").trim();
   if (!input) {
     res.status(400).json({ error: "input is required" });
     return;
   }
+
+  const isWarningMode = mode === "rate_warning";
+  const systemPrompt = isWarningMode
+    ? "你只输出一句中文短句，用于提醒玩家：开火过快会弹尽粮绝。语气克制、有一点压力感，不要说教，不要解释，不要加引号。"
+    : "你只输出一句中文。对话对象是玩家（用“你”），不是Leo本人。核心意思必须是：让玩家下周末叫上Leo，一起来我家吃烧烤。语气自然，有一点哲理，不鸡汤。必须包含“叫上Leo”和“烧烤”，并且必须包含一个明确时间词（例如：下周六/周日/周末/明晚）。禁止以“Leo”开头或直接称呼“Leo，”。";
+  const avoidLine = isWarningMode ? lastWarningLine : lastInviteLine;
 
   try {
     const r = await fetch("https://api.openai.com/v1/responses", {
@@ -88,12 +96,11 @@ export default async function handler(req, res) {
         input: [
           {
             role: "system",
-            content:
-              "你只输出一句中文。对话对象是玩家（用“你”），不是Leo本人。核心意思必须是：让玩家下周末叫上Leo，一起来我家吃烧烤。语气自然，有一点哲理，不鸡汤。必须包含“叫上Leo”和“烧烤”，并且必须包含一个明确时间词（例如：下周六/周日/周末/明晚）。禁止以“Leo”开头或直接称呼“Leo，”。",
+            content: systemPrompt,
           },
           {
             role: "user",
-            content: `${input}\n避免重复上一次：${lastInviteLine || "无"}`,
+            content: `${input}\n避免重复上一次：${avoidLine || "无"}`,
           },
         ],
         temperature: 1.05,

@@ -383,6 +383,12 @@
         "明晚你先和Leo约好，下周末一起来我家吃烧烤，热闹会把疲惫吹散。",
         "这个周末你叫上Leo来我家吃烧烤，答案有时就藏在一桌人间烟火里。",
       ];
+      const FIRE_RATE_LIMIT = {
+        windowSec: 1.2,
+        maxShots: 3,
+        popupCooldownSec: 1.6,
+      };
+      const RATE_WARNING_FALLBACK = "这样下去会弹尽粮绝，先稳一下节奏。";
 
       const state = {
         screenW: 0,
@@ -402,6 +408,13 @@
         lastInviteLine: "",
         preparedInviteLine: "",
         invitePrefetching: false,
+        preparedRateWarningLine: "",
+        rateWarningPrefetching: false,
+        lastRateWarningLine: "",
+        recentShotTs: [],
+        nextRatePopupTime: 0,
+        announceMode: "gameover",
+        warningTimer: 0,
         cloth: null,
         lastPortraitSet: "",
         lastT: performance.now(),
@@ -424,11 +437,11 @@
         return /(下周[一二三四五六日天末]?|周[一二三四五六日天末]|周末|今晚|明晚|明天|后天|本周|这个周末|下个周末)/.test(text);
       }
 
-      async function requestInviteLine(apiUrl, prompt) {
+      async function requestProxyLine(apiUrl, payload) {
         const res = await fetch(apiUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ input: prompt, lastInviteLine: state.lastInviteLine || "" }),
+          body: JSON.stringify(payload),
         });
         if (!res.ok) {
           const t = await res.text();
@@ -450,7 +463,11 @@
           const prompt = `写一句中文邀请语，必须保留核心意思：你下周末叫上Leo来我家吃烧烤。句子里必须出现一个明确时间点（例如：下周六/周日/周末/明晚）。语气自然，有一点哲理，不要鸡汤，不要解释，只输出一句话。可参考意象：${seed}。避免与这句重复：${state.lastInviteLine || "无"}。随机标记:${nonce}`;
           for (const apiUrl of apiCandidates) {
             try {
-              const result = await requestInviteLine(apiUrl, prompt);
+              const result = await requestProxyLine(apiUrl, {
+                mode: "invite",
+                input: prompt,
+                lastInviteLine: state.lastInviteLine || "",
+              });
               if (!result.ok) {
                 lastErr = `${apiUrl} -> ${result.detail}`;
                 continue;
@@ -477,9 +494,42 @@
         return `__FALLBACK_INVITE__${fallback}`;
       }
 
+      async function generateRateWarningLine() {
+        const customApiUrl = String(localStorage.getItem("OPENAI_PROXY_URL") || "").trim();
+        const apiCandidates = customApiUrl && customApiUrl !== DEFAULT_INVITE_API ? [customApiUrl, DEFAULT_INVITE_API] : [DEFAULT_INVITE_API];
+        let lastErr = "";
+        for (let attempt = 0; attempt < 4; attempt++) {
+          const nonce = `${Date.now().toString(36)}-w-${attempt}`;
+          const prompt = `写一句中文提醒：玩家开火太快，继续这样会弹尽粮绝。要求短促、有压迫感，不要鸡汤，不要解释。随机标记:${nonce}`;
+          for (const apiUrl of apiCandidates) {
+            try {
+              const result = await requestProxyLine(apiUrl, {
+                mode: "rate_warning",
+                input: prompt,
+                lastWarningLine: state.lastRateWarningLine || "",
+              });
+              if (!result.ok) {
+                lastErr = `${apiUrl} -> ${result.detail}`;
+                continue;
+              }
+              const text = String(result.text || "").replace(/^["'“”]+|["'“”]+$/g, "").trim();
+              if (!text) continue;
+              if (text === state.lastRateWarningLine) continue;
+              return text;
+            } catch (_err) {
+              lastErr = `${apiUrl} -> ${String(_err && _err.message ? _err.message : _err)}`;
+            }
+          }
+        }
+        if (lastErr) console.warn("rate warning generation failed:", lastErr);
+        return RATE_WARNING_FALLBACK;
+      }
+
       async function showAnnouncement(src) {
         announceImg.src = src;
         announce.classList.add("show");
+        state.announceMode = "gameover";
+        restartBtn.style.display = "";
         let line = state.preparedInviteLine || "";
         state.preparedInviteLine = "";
         if (!line) {
@@ -496,6 +546,23 @@
         primeInviteLine();
       }
 
+      function showRateWarningPopup(line) {
+        if (state.gameOver) return;
+        clearTimeout(state.warningTimer);
+        state.announceMode = "warning";
+        const fallbackPortrait = state.targets.find((t) => t.portrait && t.portrait.loaded)?.portrait?.src || portraits[0].src;
+        announceImg.src = fallbackPortrait;
+        announceText.textContent = line || RATE_WARNING_FALLBACK;
+        restartBtn.style.display = "none";
+        announce.classList.add("show");
+        state.warningTimer = setTimeout(() => {
+          if (state.announceMode === "warning") {
+            announce.classList.remove("show");
+            restartBtn.style.display = "";
+          }
+        }, 1300);
+      }
+
       function primeInviteLine() {
         if (state.invitePrefetching || state.preparedInviteLine) return;
         state.invitePrefetching = true;
@@ -506,6 +573,35 @@
           .finally(() => {
             state.invitePrefetching = false;
           });
+      }
+      function primeRateWarningLine() {
+        if (state.rateWarningPrefetching || state.preparedRateWarningLine) return;
+        state.rateWarningPrefetching = true;
+        generateRateWarningLine()
+          .then((line) => {
+            if (line) state.preparedRateWarningLine = line;
+          })
+          .finally(() => {
+            state.rateWarningPrefetching = false;
+          });
+      }
+      function hitFireRateLimit() {
+        const now = performance.now() * 0.001;
+        const lo = now - FIRE_RATE_LIMIT.windowSec;
+        state.recentShotTs = state.recentShotTs.filter((t) => t >= lo);
+        if (state.recentShotTs.length >= FIRE_RATE_LIMIT.maxShots) {
+          if (now >= state.nextRatePopupTime) {
+            state.nextRatePopupTime = now + FIRE_RATE_LIMIT.popupCooldownSec;
+            const line = state.preparedRateWarningLine || RATE_WARNING_FALLBACK;
+            state.preparedRateWarningLine = "";
+            state.lastRateWarningLine = line;
+            showRateWarningPopup(line);
+            primeRateWarningLine();
+          }
+          return true;
+        }
+        state.recentShotTs.push(now);
+        return false;
       }
 
       function resize() {
@@ -532,10 +628,16 @@
         state.announceSrc = "";
         state.announceName = "";
         announce.classList.remove("show");
+        clearTimeout(state.warningTimer);
+        restartBtn.style.display = "";
+        state.announceMode = "gameover";
         state.balls = [];
         state.fragments = [];
         state.score = 0;
         state.targets = [];
+        state.recentShotTs = [];
+        state.preparedRateWarningLine = "";
+        state.nextRatePopupTime = 0;
         initCloth();
         state.preparedInviteLine = "";
         state.invitePrefetching = false;
@@ -588,6 +690,7 @@
           });
         }
         primeInviteLine();
+        primeRateWarningLine();
       }
 
       function initCloth() {
@@ -1077,6 +1180,7 @@
         if (!state.drag.active) return;
         e.preventDefault();
         state.drag.active = false;
+        if (hitFireRateLimit()) return;
 
         const shot = getAimShot();
         const pose = getGunPose();
@@ -1991,6 +2095,12 @@
         createTargets();
       });
       restartBtn.addEventListener("click", () => {
+        if (state.announceMode === "warning") {
+          announce.classList.remove("show");
+          restartBtn.style.display = "";
+          state.announceMode = "gameover";
+          return;
+        }
         createTargets();
       });
 
