@@ -685,6 +685,9 @@
                 showAnnouncement(target.portrait.src);
               }
             }
+            // 子弹命中任意目标后立即销毁，防止重复击打。
+            ball.alive = false;
+            break;
           }
         }
 
