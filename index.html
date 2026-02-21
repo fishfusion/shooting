@@ -1564,7 +1564,7 @@
       function getAimShot() {
         const cosP = Math.cos(state.aim.pitch);
         const dir = normalize3(Math.sin(state.aim.yaw) * cosP, Math.sin(state.aim.pitch), Math.cos(state.aim.yaw) * cosP);
-        const speed = 34 + state.aim.power * 40;
+        const speed = 42 + state.aim.power * 48;
         return { dir, speed };
       }
       function getGunPose() {
