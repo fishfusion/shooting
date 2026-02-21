@@ -30,6 +30,20 @@
         pointer-events: none;
         white-space: pre-line;
       }
+      #targetTalkLayer {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 35;
+      }
+      .target-talk {
+        position: absolute;
+        transform: translate(-50%, -100%);
+        white-space: nowrap;
+        font: 500 12px/1.1 "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: rgba(240, 246, 255, 0.78);
+        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+      }
       #announce {
         position: fixed;
         inset: 0;
@@ -121,6 +135,7 @@
   <body>
     <canvas id="game"></canvas>
     <div id="hud"></div>
+    <div id="targetTalkLayer"></div>
     <div id="announce">
       <div id="announceCard">
         <img id="announceImg" alt="winner" />
@@ -134,6 +149,7 @@
     <script>
       const canvas = document.getElementById("game");
       const hud = document.getElementById("hud");
+      const targetTalkLayer = document.getElementById("targetTalkLayer");
       const announce = document.getElementById("announce");
       const announceImg = document.getElementById("announceImg");
       const announceText = document.getElementById("announceText");
@@ -543,6 +559,52 @@
         }
         return out; // 20 * 15 = 300 hardcoded lines
       })();
+      const TARGET_TALK_HEADS = [
+        "有本事就来，",
+        "来啊来啊，",
+        "别客气，",
+        "冲我来，",
+        "看准了再打，",
+        "你敢不敢，",
+        "再靠近点，",
+        "别怂，",
+        "快点出手，",
+        "准星别飘，",
+        "眼神跟上，",
+        "手稳一点，",
+        "节奏提起来，",
+        "火力压过来，",
+        "别只会吓唬人，",
+        "你这就上，",
+        "就等你这一发，",
+        "别磨蹭，",
+        "来点真本事，",
+        "敢打就打，",
+      ];
+      const TARGET_TALK_TAILS = [
+        "有本事打我呀。",
+        "打中我算你厉害。",
+        "别只会擦边。",
+        "让子弹说话。",
+        "别让准星走神。",
+        "冲着我来一发。",
+        "给我看看火候。",
+        "别打空气了。",
+        "要不你再瞄瞄？",
+        "来一枪痛快的。",
+        "别客气，打我呀。",
+        "别让我等太久。",
+        "就这点胆量吗？",
+        "有种就命中我。",
+        "来，正面刚。",
+      ];
+      const TARGET_TALK_LINES = (() => {
+        const out = [];
+        for (const h of TARGET_TALK_HEADS) {
+          for (const t of TARGET_TALK_TAILS) out.push(`${h}${t}`);
+        }
+        return out; // 20 * 15 = 300 hardcoded lines
+      })();
       const DANMU_CFG = {
         topOffset: 72,
         laneHeight: 34,
@@ -586,6 +648,7 @@
         missTauntPool: [],
         lastMissTauntLine: "",
         consecutiveMissShots: 0,
+        targetTalkPool: [],
         recentShotTs: [],
         nextRatePopupTime: 0,
         announceMode: "gameover",
@@ -910,6 +973,7 @@
         state.rateWarningPool = shuffled(RATE_WARNING_LINES);
         state.preparedMissTauntLine = "";
         state.missTauntPool = shuffled(MISS_TAUNT_LINES);
+        state.targetTalkPool = shuffled(TARGET_TALK_LINES);
         state.lastMissTauntLine = "";
         state.consecutiveMissShots = 0;
         state.nextRatePopupTime = 0;
@@ -929,6 +993,7 @@
         }
         state.lastPortraitSet = sig;
         for (let i = 0; i < targetCount; i++) {
+          if (!state.targetTalkPool.length) state.targetTalkPool = shuffled(TARGET_TALK_LINES);
           const z = zs[i];
           const near01 = (farZ - z) / (farZ - nearZ);
           const maxHp = Math.round((70 + near01 * 90) * 1.5 * 0.75);
@@ -962,6 +1027,7 @@
             avY: 0,
             avZ: 0,
             portrait: selectedPortraits[i],
+            talk: state.targetTalkPool.pop() || "有本事打我呀。",
           });
         }
         primeInviteLine();
@@ -2378,6 +2444,27 @@
 
       function renderHud() {
         hud.textContent = state.gameOver ? state.gameOverText : "";
+        renderTargetTalks();
+      }
+      function renderTargetTalks() {
+        if (!targetTalkLayer) return;
+        const talks = [];
+        for (const t of state.targets) {
+          if (!t || t.dead) continue;
+          const s = worldToScreen(t.x, t.y + t.r + 0.52, t.z);
+          if (!s.ok) continue;
+          if (s.sx < -120 || s.sx > state.screenW + 120 || s.sy < -80 || s.sy > state.screenH + 80) continue;
+          talks.push({ x: s.sx, y: s.sy, text: t.talk || "有本事打我呀。" });
+        }
+        targetTalkLayer.textContent = "";
+        for (const item of talks) {
+          const el = document.createElement("div");
+          el.className = "target-talk";
+          el.style.left = `${item.x}px`;
+          el.style.top = `${item.y}px`;
+          el.textContent = item.text;
+          targetTalkLayer.appendChild(el);
+        }
       }
 
       function loop(now) {
