@@ -51,6 +51,14 @@
         object-fit: cover;
         display: block;
       }
+      .portrait-disc .tint {
+        position: absolute;
+        inset: 0;
+        background: #ff2b2b;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 120ms linear;
+      }
       #announce {
         position: fixed;
         inset: 0;
@@ -981,7 +989,7 @@
             const t = o.ref;
             drawTargetShadows(tris, t);
             const hp01 = t.maxHp > 0 ? t.hp / t.maxHp : 0;
-            const col = t.hitTimer > 0 ? [1.0, 0.42, 0.21] : [0.92 - hp01 * 0.72, 0.16 + hp01 * 0.46, 0.14 + hp01 * 0.25];
+            const col = t.hitTimer > 0 ? [0.95, 0.45, 0.34] : [0.72, 0.38 + hp01 * 0.12, 0.34 + hp01 * 0.1];
             drawLitDisk(tris, t, col);
           } else {
             const b = o.ref;
@@ -1026,7 +1034,10 @@
         const img = document.createElement("img");
         img.src = target.portrait.src;
         img.alt = target.portrait.name;
+        const tint = document.createElement("div");
+        tint.className = "tint";
         el.appendChild(img);
+        el.appendChild(tint);
         portraitLayer.appendChild(el);
         target.portraitEl = el;
         return el;
@@ -1050,6 +1061,10 @@
           el.style.width = `${d}px`;
           el.style.height = `${d}px`;
           el.style.opacity = target.dead ? "0.9" : "1";
+          const hp01 = target.maxHp > 0 ? target.hp / target.maxHp : 0;
+          const tintAlpha = clamp((1 - hp01) * 0.38, 0, 0.38);
+          const tintEl = el.querySelector(".tint");
+          if (tintEl) tintEl.style.opacity = `${tintAlpha}`;
         }
       }
 
