@@ -299,6 +299,9 @@
         tetherCompliance: 0.00001,
         groundY: 0.03,
         initialReleaseDepth: 14,
+        collisionRestitution: 0.12,
+        collisionTangentDamping: 0.72,
+        collisionSpeedDamping: 0.84,
       };
 
       const cam = {
@@ -692,6 +695,9 @@
       function solveClothBallCollision() {
         const cloth = state.cloth;
         if (!cloth) return;
+        const restitution = clothSetup.collisionRestitution;
+        const tangentDamping = clothSetup.collisionTangentDamping;
+        const speedDamping = clothSetup.collisionSpeedDamping;
         for (const n of cloth.nodes) {
           if (n.invMass <= 0) continue;
           for (const ball of state.balls) {
@@ -706,12 +712,30 @@
             const ny = dy / d;
             const nz = dz / d;
             const push = rr - d;
-            n.x += nx * push;
-            n.y += ny * push;
-            n.z += nz * push;
-            ball.vx -= nx * 1.1;
-            ball.vy -= ny * 1.1;
-            ball.vz -= nz * 1.1;
+            // Let cloth absorb most penetration correction; ball only shifts a bit.
+            n.x += nx * push * 0.85;
+            n.y += ny * push * 0.85;
+            n.z += nz * push * 0.85;
+            ball.x -= nx * push * 0.15;
+            ball.y -= ny * push * 0.15;
+            ball.z -= nz * push * 0.15;
+
+            // Inelastic contact against cloth: weak normal bounce + tangential damping.
+            const vn = ball.vx * nx + ball.vy * ny + ball.vz * nz;
+            if (vn < 0) {
+              const vnx = nx * vn;
+              const vny = ny * vn;
+              const vnz = nz * vn;
+              const vtx = ball.vx - vnx;
+              const vty = ball.vy - vny;
+              const vtz = ball.vz - vnz;
+              ball.vx = vtx * tangentDamping - vnx * restitution;
+              ball.vy = vty * tangentDamping - vny * restitution;
+              ball.vz = vtz * tangentDamping - vnz * restitution;
+            }
+            ball.vx *= speedDamping;
+            ball.vy *= speedDamping;
+            ball.vz *= speedDamping;
           }
         }
       }
