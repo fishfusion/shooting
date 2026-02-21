@@ -85,6 +85,17 @@
         margin: 0;
         font: 600 20px/1.35 "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
       }
+      #restartBtn {
+        margin-top: 14px;
+        padding: 8px 22px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        background: rgba(255, 255, 255, 0.16);
+        color: #fff;
+        font: 600 18px/1 "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+        pointer-events: auto;
+        cursor: pointer;
+      }
     </style>
   </head>
   <body>
@@ -95,6 +106,7 @@
       <div id="announceCard">
         <img id="announceImg" alt="winner" />
         <p id="announceText"></p>
+        <button id="restartBtn" type="button">确定</button>
       </div>
     </div>
     <script>
@@ -104,6 +116,7 @@
       const announce = document.getElementById("announce");
       const announceImg = document.getElementById("announceImg");
       const announceText = document.getElementById("announceText");
+      const restartBtn = document.getElementById("restartBtn");
       const gl = canvas.getContext("webgl", { antialias: true, alpha: false });
       if (!gl) throw new Error("WebGL not supported");
 
@@ -257,7 +270,7 @@
       function createTargets() {
         const xs = [-5.8, -3.6, -1.5, 1.1, 3.2, 5.5];
         const ys = [2.4, 3.1, 3.8, 2.9, 4.3, 3.4];
-        const rs = [0.55, 0.72, 0.5, 0.9, 0.66, 0.6];
+        const rs = [0.72, 0.92, 0.66, 1.15, 0.86, 0.78];
         const speed = [0.85, 1.25, 1.0, 1.55, 0.95, 1.35];
         const zs = [16, 18, 20, 22, 24, 26];
         const nearZ = Math.min(...zs);
@@ -286,10 +299,10 @@
             vx: 0,
             vy: 0,
             mass: 1.1 + rs[i] * 2.0,
-            sx: (1.1 + i * 0.2) * (i % 2 ? -1 : 1),
-            sy: 0.45 + i * 0.07,
-            wx: speed[i] * 1.2,
-            wy: speed[i] * 0.9,
+            sx: (1.8 + i * 0.34) * (i % 2 ? -1 : 1),
+            sy: 0.85 + i * 0.14,
+            wx: speed[i] * 1.75,
+            wy: speed[i] * 1.35,
             phase: i * 0.8,
             anchorX: xs[i],
             anchorY: ys[i] + rs[i],
@@ -1058,6 +1071,9 @@
       window.addEventListener("touchend", onUp, { passive: false });
       window.addEventListener("resize", () => {
         resize();
+        createTargets();
+      });
+      restartBtn.addEventListener("click", () => {
         createTargets();
       });
 
