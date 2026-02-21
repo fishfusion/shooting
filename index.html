@@ -885,10 +885,11 @@
           const s1 = worldToScreen(p.x, p.y, p.z);
           if (s0.ok && s1.ok) {
             segments.push({
-              x1: state.view.x + s0.sx * state.view.scale,
-              y1: state.view.y + s0.sy * state.view.scale,
-              x2: state.view.x + s1.sx * state.view.scale,
-              y2: state.view.y + s1.sy * state.view.scale,
+              // 这里保持设计坐标（与 WebGL 渲染坐标一致）
+              x1: s0.sx,
+              y1: s0.sy,
+              x2: s1.sx,
+              y2: s1.sy,
             });
           }
           if (p.y <= 0) break;
@@ -1164,7 +1165,11 @@
           if (!coveredByFrontBall && aimSegments.length) {
             const tr = d * 0.5;
             for (const seg of aimSegments) {
-              if (circleSegmentOverlap(sx, sy, tr, seg.x1, seg.y1, seg.x2, seg.y2)) {
+              const ax1 = state.view.x + seg.x1 * state.view.scale;
+              const ay1 = state.view.y + seg.y1 * state.view.scale;
+              const ax2 = state.view.x + seg.x2 * state.view.scale;
+              const ay2 = state.view.y + seg.y2 * state.view.scale;
+              if (circleSegmentOverlap(sx, sy, tr, ax1, ay1, ax2, ay2)) {
                 coveredByAimLine = true;
                 break;
               }
