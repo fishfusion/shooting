@@ -301,9 +301,10 @@
         groundY: 0.03,
         floorReachSlack: 0.55,
         initialReleaseDepth: 14,
-        collisionRestitution: 0.06,
-        collisionTangentDamping: 0.9,
-        collisionSpeedDamping: 0.96,
+        collisionRestitution: 0.18,
+        collisionTangentDamping: 0.98,
+        collisionSpeedDamping: 1.0,
+        collisionDetachSpeed: 0.65,
         timeStepScale: 1.8,
       };
 
@@ -725,10 +726,13 @@
             nsumX += nx * push;
             nsumY += ny * push;
             nsumZ += nz * push;
-            // Push cloth away, keep ball position stable to avoid wall-like recoil.
-            n.x += nx * push * 0.95;
-            n.y += ny * push * 0.95;
-            n.z += nz * push * 0.95;
+            // Push cloth and slightly push ball out to avoid persistent penetration.
+            n.x += nx * push * 0.7;
+            n.y += ny * push * 0.7;
+            n.z += nz * push * 0.7;
+            ball.x -= nx * push * 0.3;
+            ball.y -= ny * push * 0.3;
+            ball.z -= nz * push * 0.3;
           }
           if (!hit) continue;
 
@@ -760,10 +764,20 @@
           ball.vy = vny + vty * tangentDamping;
           ball.vz = vnz + vtz * tangentDamping;
 
-          const penDamp = Math.max(0.82, 1 - maxPen * 1.1);
+          const penDamp = Math.max(0.9, 1 - maxPen * 0.4);
           ball.vx *= speedDamping * penDamp;
           ball.vy *= speedDamping * penDamp;
           ball.vz *= speedDamping * penDamp;
+
+          // Prevent sticky contact: ensure a minimum separation speed away from cloth.
+          const afterVn = ball.vx * nx + ball.vy * ny + ball.vz * nz;
+          const minOut = -clothSetup.collisionDetachSpeed;
+          if (afterVn > minOut) {
+            const dv = minOut - afterVn;
+            ball.vx += nx * dv;
+            ball.vy += ny * dv;
+            ball.vz += nz * dv;
+          }
           ball.hitCd = Math.max(ball.hitCd, 0.03);
         }
       }
@@ -803,10 +817,11 @@
           for (const c of cloth.constraints) c.lambda = 0;
           for (let i = 0; i < clothSetup.iterations; i++) {
             solveClothConstraints(stepDt);
-            solveClothBallCollision(i === clothSetup.iterations - 1);
+            solveClothBallCollision(false);
             solveClothGroundCollision();
           }
         }
+        solveClothBallCollision(true);
       }
 
       function pointerPos(e) {
