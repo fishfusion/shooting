@@ -306,7 +306,7 @@
         collisionDetachSpeed: 0.0,
         collisionMaxOutSpeed: 0.0,
         timeStepScale: 1.8,
-        ballCcdSubsteps: 6,
+        ballCcdSubsteps: 10,
         topEdgeSag: 0.9,
       };
 
@@ -828,7 +828,7 @@
         const segLen2 = dx * dx + dy * dy + dz * dz;
         if (segLen2 < 1e-8) return;
 
-        const rr = ball.r + 0.08;
+        const rr = ball.r + 0.16;
         let hit = false;
         let bestT = 1;
         let hitNx = 0, hitNy = 0, hitNz = 0;
@@ -922,18 +922,15 @@
         const hx = sx + dx * bestT;
         const hy = sy + dy * bestT;
         const hz = sz + dz * bestT;
-        // Make sure contact normal points from cloth towards ball travel endpoint.
-        const toEndX = ex - hx;
-        const toEndY = ey - hy;
-        const toEndZ = ez - hz;
-        if (toEndX * hitNx + toEndY * hitNy + toEndZ * hitNz < 0) {
+        // Make sure normal opposes motion, so resolution keeps ball on the incoming side.
+        if (hitNx * dx + hitNy * dy + hitNz * dz > 0) {
           hitNx = -hitNx;
           hitNy = -hitNy;
           hitNz = -hitNz;
         }
-        ball.x = hx + hitNx * (rr + 0.01);
-        ball.y = hy + hitNy * (rr + 0.01);
-        ball.z = hz + hitNz * (rr + 0.01);
+        ball.x = hx + hitNx * (rr + 0.02);
+        ball.y = hy + hitNy * (rr + 0.02);
+        ball.z = hz + hitNz * (rr + 0.02);
 
         const vn = ball.vx * hitNx + ball.vy * hitNy + ball.vz * hitNz;
         if (vn < 0) {
