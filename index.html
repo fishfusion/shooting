@@ -301,10 +301,11 @@
         groundY: 0.03,
         floorReachSlack: 2.4,
         initialReleaseDepth: 14,
-        collisionRestitution: 0.18,
+        collisionRestitution: 0.04,
         collisionTangentDamping: 0.98,
         collisionSpeedDamping: 1.0,
-        collisionDetachSpeed: 0.65,
+        collisionDetachSpeed: 0.28,
+        collisionMaxOutSpeed: 0.55,
         timeStepScale: 1.8,
       };
 
@@ -727,12 +728,12 @@
             nsumY += ny * push;
             nsumZ += nz * push;
             // Push cloth and slightly push ball out to avoid persistent penetration.
-            n.x += nx * push * 0.7;
-            n.y += ny * push * 0.7;
-            n.z += nz * push * 0.7;
-            ball.x -= nx * push * 0.3;
-            ball.y -= ny * push * 0.3;
-            ball.z -= nz * push * 0.3;
+            n.x += nx * push * 0.82;
+            n.y += ny * push * 0.82;
+            n.z += nz * push * 0.82;
+            ball.x -= nx * push * 0.18;
+            ball.y -= ny * push * 0.18;
+            ball.z -= nz * push * 0.18;
           }
           if (!hit) continue;
 
@@ -777,6 +778,14 @@
             ball.vx += nx * dv;
             ball.vy += ny * dv;
             ball.vz += nz * dv;
+          }
+          const capOut = -clothSetup.collisionMaxOutSpeed;
+          const finalVn = ball.vx * nx + ball.vy * ny + ball.vz * nz;
+          if (finalVn < capOut) {
+            const dvCap = capOut - finalVn;
+            ball.vx += nx * dvCap;
+            ball.vy += ny * dvCap;
+            ball.vz += nz * dvCap;
           }
           ball.hitCd = Math.max(ball.hitCd, 0.03);
         }
