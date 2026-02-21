@@ -603,6 +603,7 @@
         bgmPlayer: null,
         bgmReady: false,
         bgmStarted: false,
+        bgmPendingStart: false,
         bgmInit: false,
         cloth: null,
         lastPortraitSet: "",
@@ -648,8 +649,25 @@
               try {
                 state.bgmPlayer.setVolume(YT_BGM_VOLUME);
               } catch (_err) {}
+              if (state.bgmPendingStart) {
+                tryStartBgm();
+              }
+            },
+            onStateChange: (ev) => {
+              if (window.YT && ev.data === window.YT.PlayerState.PLAYING) {
+                state.bgmStarted = true;
+                state.bgmPendingStart = false;
+              } else if (
+                window.YT &&
+                (ev.data === window.YT.PlayerState.PAUSED ||
+                  ev.data === window.YT.PlayerState.ENDED ||
+                  ev.data === window.YT.PlayerState.UNSTARTED)
+              ) {
+                state.bgmStarted = false;
+              }
             },
             onError: (_e) => {
+              state.bgmStarted = false;
               console.warn("bgm player error");
             },
           },
@@ -677,15 +695,13 @@
         document.head.appendChild(tag);
       }
       function tryStartBgm() {
-        if (state.bgmStarted) return;
         initBgmPlayer();
+        state.bgmPendingStart = true;
         if (!state.bgmReady || !state.bgmPlayer) return;
         try {
           state.bgmPlayer.unMute();
           state.bgmPlayer.setVolume(YT_BGM_VOLUME);
-          const p = state.bgmPlayer.playVideo();
-          if (p && typeof p.catch === "function") p.catch(() => {});
-          state.bgmStarted = true;
+          state.bgmPlayer.playVideo();
         } catch (_err) {}
       }
       function extendInviteLine(baseLine) {
@@ -1464,6 +1480,7 @@
       }
 
       function onUp(e) {
+        tryStartBgm();
         if (isFireLocked()) {
           state.drag.active = false;
           return;
