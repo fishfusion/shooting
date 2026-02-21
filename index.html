@@ -80,6 +80,26 @@
       #announce.warning #announceCard p {
         font: 700 22px/1.2 "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
       }
+      #announce.taunt {
+        padding-bottom: 11vh;
+      }
+      #announce.taunt #announceCard {
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        padding: 8px 10px;
+      }
+      #announce.taunt #announceCard img {
+        display: block;
+        width: 82px;
+        height: 82px;
+        margin: 0 auto 8px;
+        border: 0;
+      }
+      #announce.taunt #announceCard p {
+        font: 700 21px/1.2 "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+      }
       #restartBtn {
         margin-top: 14px;
         padding: 8px 22px;
@@ -453,6 +473,54 @@
         }
         return out; // 20 * 15 = 300 hardcoded lines
       })();
+      const MISS_TAUNT_TRIGGER = 3;
+      const MISS_TAUNT_FALLBACK = "你这准心着实不行啊。";
+      const MISS_TAUNT_HEADS = [
+        "你这准心，",
+        "这枪法，",
+        "这手感，",
+        "你这瞄法，",
+        "看得出来，",
+        "兄弟你这波，",
+        "这连空，",
+        "你今天这状态，",
+        "这节奏，",
+        "你这开火姿势，",
+        "这准头，",
+        "你这眼神，",
+        "你这手一抖，",
+        "你这压枪，",
+        "这发散，",
+        "这不叫射击，",
+        "你这连点，",
+        "你这预判，",
+        "这都能空，",
+        "你这火力分配，",
+      ];
+      const MISS_TAUNT_TAILS = [
+        "着实不行啊。",
+        "像在给空气理发。",
+        "靶子都替你着急。",
+        "风都比你打得准。",
+        "建议先找回准心。",
+        "像在和命中率绝交。",
+        "再空就要笑场了。",
+        "全场都在等你中一发。",
+        "准心今天在休假。",
+        "子弹都不知道去哪。",
+        "打得挺热闹，命中挺安静。",
+        "建议先深呼吸再扣扳机。",
+        "再这么打要被靶子教育了。",
+        "像在给背景做特效。",
+        "这波操作很有想象力。",
+      ];
+      const MISS_TAUNT_LINES = (() => {
+        const out = [];
+        for (const h of MISS_TAUNT_HEADS) {
+          for (const t of MISS_TAUNT_TAILS) out.push(`${h}${t}`);
+        }
+        return out; // 20 * 15 = 300 hardcoded lines
+      })();
 
       const state = {
         screenW: 0,
@@ -475,6 +543,10 @@
         preparedRateWarningLine: "",
         rateWarningPool: [],
         lastRateWarningLine: "",
+        preparedMissTauntLine: "",
+        missTauntPool: [],
+        lastMissTauntLine: "",
+        consecutiveMissShots: 0,
         recentShotTs: [],
         nextRatePopupTime: 0,
         announceMode: "gameover",
@@ -576,6 +648,7 @@
       async function showAnnouncement(src) {
         clearTimeout(state.warningTimer);
         announce.classList.remove("warning");
+        announce.classList.remove("taunt");
         announceImg.src = src;
         announce.classList.add("show");
         state.announceMode = "gameover";
@@ -604,15 +677,39 @@
         announceImg.src = fallbackPortrait;
         announceText.textContent = line || RATE_WARNING_FALLBACK;
         restartBtn.style.display = "none";
+        announce.classList.remove("taunt");
         announce.classList.add("warning");
         announce.classList.add("show");
         state.warningTimer = setTimeout(() => {
           if (state.announceMode === "warning") {
             announce.classList.remove("show");
             announce.classList.remove("warning");
+            announce.classList.remove("taunt");
             restartBtn.style.display = "";
+            state.announceMode = "gameover";
           }
         }, 1000);
+      }
+      function showMissTauntPopup(line) {
+        if (state.gameOver) return;
+        clearTimeout(state.warningTimer);
+        state.announceMode = "taunt";
+        const talker = portraits[Math.floor(Math.random() * portraits.length)] || portraits[0];
+        announceImg.src = talker.src;
+        announceText.textContent = line || MISS_TAUNT_FALLBACK;
+        restartBtn.style.display = "none";
+        announce.classList.remove("warning");
+        announce.classList.add("taunt");
+        announce.classList.add("show");
+        state.warningTimer = setTimeout(() => {
+          if (state.announceMode === "taunt") {
+            announce.classList.remove("show");
+            announce.classList.remove("warning");
+            announce.classList.remove("taunt");
+            restartBtn.style.display = "";
+            state.announceMode = "gameover";
+          }
+        }, 1300);
       }
 
       function primeInviteLine() {
@@ -630,6 +727,32 @@
         if (!state.preparedRateWarningLine) {
           state.preparedRateWarningLine = generateRateWarningLine();
         }
+      }
+      function generateMissTauntLine() {
+        if (!state.missTauntPool.length) {
+          state.missTauntPool = shuffled(MISS_TAUNT_LINES);
+        }
+        let line = state.missTauntPool.pop() || MISS_TAUNT_FALLBACK;
+        if (line === state.lastMissTauntLine && state.missTauntPool.length) {
+          line = state.missTauntPool.pop() || line;
+        }
+        return line;
+      }
+      function primeMissTauntLine() {
+        if (!state.preparedMissTauntLine) {
+          state.preparedMissTauntLine = generateMissTauntLine();
+        }
+      }
+      function registerMissedShot() {
+        if (state.gameOver) return;
+        state.consecutiveMissShots += 1;
+        if (state.consecutiveMissShots < MISS_TAUNT_TRIGGER) return;
+        const line = state.preparedMissTauntLine || MISS_TAUNT_FALLBACK;
+        state.preparedMissTauntLine = "";
+        state.lastMissTauntLine = line;
+        state.consecutiveMissShots = 0;
+        showMissTauntPopup(line);
+        primeMissTauntLine();
       }
       function hitFireRateLimit() {
         const now = performance.now() * 0.001;
@@ -675,6 +798,7 @@
         state.announceName = "";
         announce.classList.remove("show");
         announce.classList.remove("warning");
+        announce.classList.remove("taunt");
         clearTimeout(state.warningTimer);
         restartBtn.style.display = "";
         state.announceMode = "gameover";
@@ -685,6 +809,10 @@
         state.recentShotTs = [];
         state.preparedRateWarningLine = "";
         state.rateWarningPool = shuffled(RATE_WARNING_LINES);
+        state.preparedMissTauntLine = "";
+        state.missTauntPool = shuffled(MISS_TAUNT_LINES);
+        state.lastMissTauntLine = "";
+        state.consecutiveMissShots = 0;
         state.nextRatePopupTime = 0;
         initCloth();
         state.preparedInviteLine = "";
@@ -739,6 +867,7 @@
         }
         primeInviteLine();
         primeRateWarningLine();
+        primeMissTauntLine();
       }
 
       function initCloth() {
@@ -1163,7 +1292,7 @@
       }
 
       function spawnBall(x, y, z, vx, vy, vz) {
-        state.balls.push({ x, y, z, vx, vy, vz, r: 0.28, mass: 3.2, alive: true, stopped: false, hitCd: 0 });
+        state.balls.push({ x, y, z, vx, vy, vz, r: 0.28, mass: 3.2, alive: true, stopped: false, hitCd: 0, hitTarget: false, missCounted: false });
       }
 
       function spawnBallFragments(ball) {
@@ -1331,6 +1460,10 @@
                 ball.vx = 0;
                 ball.vy = 0;
                 ball.vz = 0;
+                if (!ball.hitTarget && !ball.missCounted) {
+                  ball.missCounted = true;
+                  registerMissedShot();
+                }
               }
             }
 
@@ -1389,6 +1522,7 @@
               target.hp = Math.max(0, target.hp - damage);
               target.hitTimer = 0.25;
               state.score += 1;
+              state.consecutiveMissShots = 0;
               ball.hitCd = 0.08;
               if (target.hp <= 0) {
                 state.gameOver = true;
@@ -1409,9 +1543,20 @@
               }
             }
             // 子弹命中任意目标后碎裂并销毁，防止重复击打。
+            ball.hitTarget = true;
             spawnBallFragments(ball);
             ball.alive = false;
             break;
+          }
+        }
+
+        for (const b of state.balls) {
+          if (b.stopped) continue;
+          const removedByRange = !(b.z < 42 && b.y > -2);
+          const removedByDeath = !b.alive;
+          if ((removedByRange || removedByDeath) && !b.hitTarget && !b.missCounted) {
+            b.missCounted = true;
+            registerMissedShot();
           }
         }
 
@@ -2143,9 +2288,10 @@
         createTargets();
       });
       restartBtn.addEventListener("click", () => {
-        if (state.announceMode === "warning") {
+        if (state.announceMode === "warning" || state.announceMode === "taunt") {
           announce.classList.remove("show");
           announce.classList.remove("warning");
+          announce.classList.remove("taunt");
           restartBtn.style.display = "";
           state.announceMode = "gameover";
           return;
