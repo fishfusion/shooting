@@ -306,6 +306,7 @@
         collisionDetachSpeed: 0.0,
         collisionMaxOutSpeed: 0.12,
         timeStepScale: 1.8,
+        ballCcdSubsteps: 6,
       };
 
       const cam = {
@@ -1058,39 +1059,46 @@
         for (const ball of state.balls) {
           if (!ball.alive) continue;
           if (ball.stopped) continue;
-          const prev = { x: ball.x, y: ball.y, z: ball.z };
           ball.hitCd = Math.max(0, ball.hitCd - dt);
-          ball.vy += world.gravity * dt;
-          ball.vx *= world.drag;
-          ball.vy *= world.drag;
-          ball.vz *= world.drag;
+          const substeps = Math.max(1, clothSetup.ballCcdSubsteps | 0);
+          const subDt = dt / substeps;
+          const dragStep = Math.pow(world.drag, 1 / substeps);
 
-          ball.x += ball.vx * dt;
-          ball.y += ball.vy * dt;
-          ball.z += ball.vz * dt;
+          for (let s = 0; s < substeps; s++) {
+            if (!ball.alive || ball.stopped) break;
+            const prev = { x: ball.x, y: ball.y, z: ball.z };
+            ball.vy += world.gravity * subDt;
+            ball.vx *= dragStep;
+            ball.vy *= dragStep;
+            ball.vz *= dragStep;
 
-          if (ball.y - ball.r < 0) {
-            ball.y = ball.r;
-            ball.vy = Math.abs(ball.vy) * world.bounce;
-            ball.vx *= world.groundFriction;
-            ball.vz *= world.groundFriction;
-            if (Math.abs(ball.vy) < 1.1 && Math.hypot(ball.vx, ball.vz) < 1.0) {
-              ball.stopped = true;
-              ball.vx = 0;
-              ball.vy = 0;
-              ball.vz = 0;
+            ball.x += ball.vx * subDt;
+            ball.y += ball.vy * subDt;
+            ball.z += ball.vz * subDt;
+
+            resolveBallClothSweep(ball, prev);
+
+            if (ball.y - ball.r < 0) {
+              ball.y = ball.r;
+              ball.vy = Math.abs(ball.vy) * world.bounce;
+              ball.vx *= world.groundFriction;
+              ball.vz *= world.groundFriction;
+              if (Math.abs(ball.vy) < 1.1 && Math.hypot(ball.vx, ball.vz) < 1.0) {
+                ball.stopped = true;
+                ball.vx = 0;
+                ball.vy = 0;
+                ball.vz = 0;
+              }
+            }
+
+            if (ball.x - ball.r < -7) {
+              ball.x = -7 + ball.r;
+              ball.vx = Math.abs(ball.vx) * world.wallBounce;
+            } else if (ball.x + ball.r > 7) {
+              ball.x = 7 - ball.r;
+              ball.vx = -Math.abs(ball.vx) * world.wallBounce;
             }
           }
-
-          if (ball.x - ball.r < -7) {
-            ball.x = -7 + ball.r;
-            ball.vx = Math.abs(ball.vx) * world.wallBounce;
-          } else if (ball.x + ball.r > 7) {
-            ball.x = 7 - ball.r;
-            ball.vx = -Math.abs(ball.vx) * world.wallBounce;
-          }
-
-          resolveBallClothSweep(ball, prev);
 
           for (const target of state.targets) {
             if (target.dead) continue;
