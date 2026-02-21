@@ -433,7 +433,7 @@
         rateWarningRefreshTimer: 0,
         rateWarningLastFetchOk: false,
         rateWarningBackoffMs: 1200,
-        rateWarningApiDisabled: false,
+        rateWarningApiDisableUntil: 0,
         lastRateWarningLine: "",
         recentShotTs: [],
         nextRatePopupTime: 0,
@@ -523,7 +523,7 @@
       }
 
       async function generateRateWarningLine() {
-        if (state.rateWarningApiDisabled) return { text: RATE_WARNING_FALLBACK, fromOpenAI: false };
+        if (Date.now() < state.rateWarningApiDisableUntil) return { text: RATE_WARNING_FALLBACK, fromOpenAI: false };
         const customApiUrl = String(localStorage.getItem("OPENAI_PROXY_URL") || "").trim();
         const useCustomOnGithub = customApiUrl && !customApiUrl.startsWith("/");
         const apiCandidates =
@@ -543,16 +543,17 @@
               });
               if (!result.ok) {
                 lastErr = `${apiUrl} -> ${result.detail}`;
-                if (/HTTP\s(401|403|405)/.test(result.detail)) state.rateWarningApiDisabled = true;
+                if (/HTTP\s(401|403|405)/.test(result.detail)) state.rateWarningApiDisableUntil = Date.now() + 20000;
                 continue;
               }
+              state.rateWarningApiDisableUntil = 0;
               const text = String(result.text || "").replace(/^["'“”]+|["'“”]+$/g, "").trim();
               if (!text) continue;
               if (text === state.lastRateWarningLine) continue;
               return { text, fromOpenAI: true };
             } catch (_err) {
               lastErr = `${apiUrl} -> ${String(_err && _err.message ? _err.message : _err)}`;
-              if (/Failed to fetch|NetworkError|CORS|ERR_FAILED/i.test(lastErr)) state.rateWarningApiDisabled = true;
+              if (/Failed to fetch|NetworkError|CORS|ERR_FAILED/i.test(lastErr)) state.rateWarningApiDisableUntil = Date.now() + 20000;
             }
           }
         }
@@ -614,7 +615,7 @@
           });
       }
       function primeRateWarningLine() {
-        if (state.rateWarningApiDisabled) return;
+        if (Date.now() < state.rateWarningApiDisableUntil) return;
         if (state.rateWarningPrefetching) return;
         if (state.rateWarningPool.length >= RATE_WARNING_POOL_SIZE) return;
         let gotOpenAI = false;
@@ -647,10 +648,9 @@
           });
       }
       function startRateWarningRefresh() {
-        if (state.rateWarningApiDisabled) return;
         if (state.rateWarningRefreshTimer) clearInterval(state.rateWarningRefreshTimer);
         state.rateWarningRefreshTimer = setInterval(() => {
-          if (state.rateWarningApiDisabled) return;
+          if (Date.now() < state.rateWarningApiDisableUntil) return;
           if (state.rateWarningPool.length < RATE_WARNING_POOL_SIZE + 1) primeRateWarningLine();
         }, RATE_WARNING_REFRESH_MS);
       }
@@ -718,7 +718,7 @@
         state.preparedRateWarningLine = "";
         state.rateWarningPool = [];
         state.rateWarningBackoffMs = 1200;
-        state.rateWarningApiDisabled = false;
+        state.rateWarningApiDisableUntil = 0;
         if (state.rateWarningRefreshTimer) {
           clearInterval(state.rateWarningRefreshTimer);
           state.rateWarningRefreshTimer = 0;
