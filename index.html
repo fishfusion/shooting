@@ -909,6 +909,31 @@
         const dy = cy - py;
         return dx * dx + dy * dy <= r * r;
       }
+      function circleCircleOverlap(x1, y1, r1, x2, y2, r2) {
+        const dx = x1 - x2;
+        const dy = y1 - y2;
+        const rr = r1 + r2;
+        return dx * dx + dy * dy <= rr * rr;
+      }
+      function getGunScreenOccluders() {
+        const pose = getGunPose();
+        const p0 = worldToScreen(state.gun.x, state.gun.y, state.gun.z);
+        const p1 = worldToScreen(pose.receiverCenter.x, pose.receiverCenter.y, pose.receiverCenter.z);
+        const p2 = worldToScreen(pose.muzzle.x, pose.muzzle.y, pose.muzzle.z);
+        const out = [];
+        const pushOcc = (p, radWorld) => {
+          if (!p.ok) return;
+          out.push({
+            x: state.view.x + p.sx * state.view.scale,
+            y: state.view.y + p.sy * state.view.scale,
+            r: radWorld * p.scale * 180 * state.view.scale,
+          });
+        };
+        pushOcc(p0, 0.72);
+        pushOcc(p1, 0.62);
+        pushOcc(p2, 0.46);
+        return out;
+      }
 
       function drawLitDisk(arr, target, baseColor) {
         const seg = 28;
@@ -1130,6 +1155,7 @@
 
       function renderPortraits() {
         const aimSegments = getAimPathScreenSegments();
+        const gunOcc = getGunScreenOccluders();
         for (const target of state.targets) {
           const el = ensurePortraitElement(target);
           const c = worldToScreen(target.x, target.y, target.z);
@@ -1176,12 +1202,23 @@
             }
           }
 
+          let coveredByGun = false;
+          if (!coveredByFrontBall && !coveredByAimLine && gunOcc.length) {
+            const tr = d * 0.5;
+            for (const g of gunOcc) {
+              if (circleCircleOverlap(sx, sy, tr, g.x, g.y, g.r)) {
+                coveredByGun = true;
+                break;
+              }
+            }
+          }
+
           el.style.display = "block";
           el.style.left = `${sx}px`;
           el.style.top = `${sy}px`;
           el.style.width = `${d}px`;
           el.style.height = `${d}px`;
-          el.style.opacity = coveredByFrontBall || coveredByAimLine ? "0" : target.dead ? "0.9" : "1";
+          el.style.opacity = coveredByFrontBall || coveredByAimLine || coveredByGun ? "0" : target.dead ? "0.9" : "1";
           const hp01 = target.maxHp > 0 ? target.hp / target.maxHp : 0;
           const tintAlpha = clamp((1 - hp01) * 0.38, 0, 0.38);
           const tintEl = el.querySelector(".tint");
