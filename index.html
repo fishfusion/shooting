@@ -98,7 +98,103 @@
       const gl = canvas.getContext("webgl", { antialias: true, alpha: false });
       if (!gl) throw new Error("WebGL not supported");
 
-      const vs = `
+      const meshVS = `
+        attribute vec3 a_pos;
+        attribute vec3 a_nrm;
+        attribute vec4 a_col;
+        uniform mat4 u_viewProj;
+        varying vec3 v_pos;
+        varying vec3 v_nrm;
+        varying vec4 v_col;
+        void main() {
+          v_pos = a_pos;
+          v_nrm = a_nrm;
+          v_col = a_col;
+          gl_Position = u_viewProj * vec4(a_pos, 1.0);
+        }
+      `;
+      const meshFS = `
+        precision mediump float;
+        varying vec3 v_pos;
+        varying vec3 v_nrm;
+        varying vec4 v_col;
+        uniform vec3 u_camPos;
+        uniform vec3 u_lightDir;
+        uniform vec3 u_lightColor;
+        uniform float u_lightIntensity;
+        uniform vec3 u_ambColor;
+        uniform float u_ambIntensity;
+        uniform float u_shininess;
+        uniform float u_specStrength;
+        void main() {
+          vec3 n = normalize(v_nrm);
+          vec3 l = normalize(-u_lightDir);
+          vec3 v = normalize(u_camPos - v_pos);
+          vec3 h = normalize(l + v);
+          float ndotl = max(dot(n, l), 0.0);
+          float ndoth = max(dot(n, h), 0.0);
+          float spec = pow(ndoth, u_shininess) * u_specStrength;
+
+          vec3 amb = v_col.rgb * u_ambColor * u_ambIntensity;
+          vec3 diff = v_col.rgb * u_lightColor * (ndotl * u_lightIntensity);
+          vec3 col = amb + diff + u_lightColor * spec;
+          gl_FragColor = vec4(min(col, vec3(1.0)), v_col.a);
+        }
+      `;
+      const texVS = `
+        attribute vec3 a_pos;
+        attribute vec3 a_nrm;
+        attribute vec4 a_col;
+        attribute vec2 a_uv;
+        uniform mat4 u_viewProj;
+        varying vec3 v_pos;
+        varying vec3 v_nrm;
+        varying vec4 v_col;
+        varying vec2 v_uv;
+        void main() {
+          v_pos = a_pos;
+          v_nrm = a_nrm;
+          v_col = a_col;
+          v_uv = a_uv;
+          gl_Position = u_viewProj * vec4(a_pos, 1.0);
+        }
+      `;
+      const texFS = `
+        precision mediump float;
+        varying vec3 v_pos;
+        varying vec3 v_nrm;
+        varying vec4 v_col;
+        varying vec2 v_uv;
+        uniform sampler2D u_tex;
+        uniform float u_redTint;
+        uniform vec3 u_camPos;
+        uniform vec3 u_lightDir;
+        uniform vec3 u_lightColor;
+        uniform float u_lightIntensity;
+        uniform vec3 u_ambColor;
+        uniform float u_ambIntensity;
+        void main() {
+          vec4 tex = texture2D(u_tex, v_uv);
+          if (tex.a < 0.01) discard;
+
+          vec3 base = mix(tex.rgb, vec3(1.0, 0.16, 0.16), clamp(u_redTint, 0.0, 0.45));
+          base *= v_col.rgb;
+
+          vec3 n = normalize(v_nrm);
+          vec3 l = normalize(-u_lightDir);
+          vec3 v = normalize(u_camPos - v_pos);
+          vec3 h = normalize(l + v);
+          float ndotl = max(dot(n, l), 0.0);
+          float ndoth = max(dot(n, h), 0.0);
+          float spec = pow(ndoth, 28.0) * 0.25;
+
+          vec3 amb = base * u_ambColor * u_ambIntensity;
+          vec3 diff = base * u_lightColor * (ndotl * u_lightIntensity);
+          vec3 col = amb + diff + u_lightColor * spec;
+          gl_FragColor = vec4(min(col, vec3(1.0)), v_col.a);
+        }
+      `;
+      const lineVS = `
         attribute vec2 a_pos;
         attribute vec4 a_col;
         varying vec4 v_col;
@@ -107,72 +203,74 @@
           v_col = a_col;
         }
       `;
-      const fs = `
+      const lineFS = `
         precision mediump float;
         varying vec4 v_col;
         void main() {
           gl_FragColor = v_col;
         }
       `;
-      const vsTex = `
-        attribute vec2 a_pos;
-        attribute vec2 a_uv;
-        varying vec2 v_uv;
-        void main() {
-          gl_Position = vec4(a_pos, 0.0, 1.0);
-          v_uv = a_uv;
-        }
-      `;
-      const fsTex = `
-        precision mediump float;
-        varying vec2 v_uv;
-        uniform sampler2D u_tex;
-        uniform vec4 u_tint;
-        void main() {
-          vec2 d = v_uv - vec2(0.5);
-          if (dot(d, d) > 0.25) discard;
-          vec4 tex = texture2D(u_tex, v_uv);
-          if (tex.a < 0.01) discard;
-          vec3 rgb = mix(tex.rgb, vec3(1.0, 0.15, 0.15), u_tint.a);
-          gl_FragColor = vec4(rgb, 1.0);
-        }
-      `;
-      function shader(type, src) {
+
+      function compile(type, src) {
         const s = gl.createShader(type);
         gl.shaderSource(s, src);
         gl.compileShader(s);
         if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
         return s;
       }
-      const prog = gl.createProgram();
-      gl.attachShader(prog, shader(gl.VERTEX_SHADER, vs));
-      gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, fs));
-      gl.linkProgram(prog);
-      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
-      gl.useProgram(prog);
-      const texProg = gl.createProgram();
-      gl.attachShader(texProg, shader(gl.VERTEX_SHADER, vsTex));
-      gl.attachShader(texProg, shader(gl.FRAGMENT_SHADER, fsTex));
-      gl.linkProgram(texProg);
-      if (!gl.getProgramParameter(texProg, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(texProg));
+      function makeProgram(vsSrc, fsSrc) {
+        const p = gl.createProgram();
+        gl.attachShader(p, compile(gl.VERTEX_SHADER, vsSrc));
+        gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fsSrc));
+        gl.linkProgram(p);
+        if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+        return p;
+      }
 
-      const aPos = gl.getAttribLocation(prog, "a_pos");
-      const aCol = gl.getAttribLocation(prog, "a_col");
-      const vbo = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-      gl.enableVertexAttribArray(aPos);
-      gl.enableVertexAttribArray(aCol);
-      gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 24, 0);
-      gl.vertexAttribPointer(aCol, 4, gl.FLOAT, false, 24, 8);
-      gl.enable(gl.BLEND);
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-      const texVbo = gl.createBuffer();
-      const texAPos = gl.getAttribLocation(texProg, "a_pos");
-      const texAUv = gl.getAttribLocation(texProg, "a_uv");
-      const texUTex = gl.getUniformLocation(texProg, "u_tex");
-      const texUTint = gl.getUniformLocation(texProg, "u_tint");
+      const meshProg = makeProgram(meshVS, meshFS);
+      const texProg = makeProgram(texVS, texFS);
+      const lineProg = makeProgram(lineVS, lineFS);
 
-      const design = { w: 1080, h: 1920 };
+      const mesh = {
+        prog: meshProg,
+        vbo: gl.createBuffer(),
+        aPos: gl.getAttribLocation(meshProg, "a_pos"),
+        aNrm: gl.getAttribLocation(meshProg, "a_nrm"),
+        aCol: gl.getAttribLocation(meshProg, "a_col"),
+        uViewProj: gl.getUniformLocation(meshProg, "u_viewProj"),
+        uCamPos: gl.getUniformLocation(meshProg, "u_camPos"),
+        uLightDir: gl.getUniformLocation(meshProg, "u_lightDir"),
+        uLightColor: gl.getUniformLocation(meshProg, "u_lightColor"),
+        uLightIntensity: gl.getUniformLocation(meshProg, "u_lightIntensity"),
+        uAmbColor: gl.getUniformLocation(meshProg, "u_ambColor"),
+        uAmbIntensity: gl.getUniformLocation(meshProg, "u_ambIntensity"),
+        uShininess: gl.getUniformLocation(meshProg, "u_shininess"),
+        uSpecStrength: gl.getUniformLocation(meshProg, "u_specStrength"),
+      };
+      const tex = {
+        prog: texProg,
+        vbo: gl.createBuffer(),
+        aPos: gl.getAttribLocation(texProg, "a_pos"),
+        aNrm: gl.getAttribLocation(texProg, "a_nrm"),
+        aCol: gl.getAttribLocation(texProg, "a_col"),
+        aUv: gl.getAttribLocation(texProg, "a_uv"),
+        uViewProj: gl.getUniformLocation(texProg, "u_viewProj"),
+        uCamPos: gl.getUniformLocation(texProg, "u_camPos"),
+        uLightDir: gl.getUniformLocation(texProg, "u_lightDir"),
+        uLightColor: gl.getUniformLocation(texProg, "u_lightColor"),
+        uLightIntensity: gl.getUniformLocation(texProg, "u_lightIntensity"),
+        uAmbColor: gl.getUniformLocation(texProg, "u_ambColor"),
+        uAmbIntensity: gl.getUniformLocation(texProg, "u_ambIntensity"),
+        uTex: gl.getUniformLocation(texProg, "u_tex"),
+        uRedTint: gl.getUniformLocation(texProg, "u_redTint"),
+      };
+      const line = {
+        prog: lineProg,
+        vbo: gl.createBuffer(),
+        aPos: gl.getAttribLocation(lineProg, "a_pos"),
+        aCol: gl.getAttribLocation(lineProg, "a_col"),
+      };
+
       const world = {
         gravity: -22,
         bounce: 0.64,
@@ -183,17 +281,25 @@
         targetDamping: 8,
         targetGravity: -5,
       };
-      const cam = { x: 0, y: 3.8, z: -16, focal: 1300, near: 0.25 };
+
+      const cam = {
+        pos: { x: 0, y: 3.8, z: -16 },
+        target: { x: 0, y: 2.6, z: 14 },
+        up: { x: 0, y: 1, z: 0 },
+        fovY: Math.PI / 4.1,
+        near: 0.1,
+        far: 120,
+      };
       const directionalLight = {
-        // 往右前下方照射: (+x, -y, +z)
         dir: normalize3(0.9, -1.1, 1.0),
         color: [1.0, 0.96, 0.9],
-        intensity: 1.18,
+        intensity: 1.16,
       };
       const ambientLight = {
-        color: [0.48, 0.56, 0.68],
-        intensity: 0.18,
+        color: [0.5, 0.58, 0.7],
+        intensity: 0.2,
       };
+
       const portraitFiles = [
         "Alan.jpg",
         "Ben.jpg",
@@ -211,32 +317,29 @@
       const portraits = portraitFiles.map((file) => {
         const img = new Image();
         img.src = `Assets/${file}`;
-        const tex = gl.createTexture();
-        gl.bindTexture(gl.TEXTURE_2D, tex);
+        const texObj = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texObj);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([255, 255, 255, 255]));
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        const portrait = {
+        const p = {
           file,
           name: file.replace(".jpg", ""),
           src: `Assets/${file}`,
-          img,
-          tex,
+          tex: texObj,
           loaded: false,
         };
         img.onload = () => {
-          gl.bindTexture(gl.TEXTURE_2D, tex);
+          gl.bindTexture(gl.TEXTURE_2D, texObj);
           gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
           gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-          portrait.loaded = true;
+          p.loaded = true;
         };
-        img.onerror = () => {
-          portrait.loaded = false;
-        };
-        return portrait;
+        return p;
       });
+
       const DEFAULT_INVITE_API = "/api/invite";
       const ORIGINAL_INVITE = "恭喜你，下周六叫上Leo来我家吃烧烤吧。";
       const PHILOSOPHICAL_SEEDS = [
@@ -250,7 +353,7 @@
       const state = {
         screenW: 0,
         screenH: 0,
-        view: { x: 0, y: 0, w: 0, h: 0, scale: 1, cx: 0, cy: 0 },
+        viewProj: identity4(),
         gun: { x: 0, y: 1.2, z: -6 },
         aim: { yaw: 0, pitch: 0.28, power: 0.35 },
         drag: { active: false, x: 0, y: 0 },
@@ -278,9 +381,9 @@
         }
         return a;
       }
+
       async function generatePhilosophicalInviteLine() {
         const apiUrl = localStorage.getItem("OPENAI_PROXY_URL") || DEFAULT_INVITE_API;
-
         for (let attempt = 0; attempt < 5; attempt++) {
           const seed = PHILOSOPHICAL_SEEDS[Math.floor(Math.random() * PHILOSOPHICAL_SEEDS.length)];
           const nonce = `${Date.now().toString(36)}-${attempt}`;
@@ -288,13 +391,8 @@
           try {
             const res = await fetch(apiUrl, {
               method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                input: prompt,
-                lastInviteLine: state.lastInviteLine || "",
-              }),
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ input: prompt, lastInviteLine: state.lastInviteLine || "" }),
             });
             if (!res.ok) continue;
             const data = await res.json();
@@ -333,30 +431,17 @@
         canvas.width = Math.floor(state.screenW * dpr);
         canvas.height = Math.floor(state.screenH * dpr);
         gl.viewport(0, 0, canvas.width, canvas.height);
-
-        const ta = design.w / design.h;
-        const sa = state.screenW / state.screenH;
-        let vw = state.screenW;
-        let vh = state.screenH;
-        if (sa > ta) vw = vh * ta;
-        else vh = vw / ta;
-        state.view.w = vw;
-        state.view.h = vh;
-        state.view.x = (state.screenW - vw) * 0.5;
-        state.view.y = (state.screenH - vh) * 0.5;
-        state.view.scale = vw / design.w;
-        state.view.cx = design.w * 0.5;
-        state.view.cy = design.h * 0.5;
       }
 
       function createTargets() {
         const xs = [-5.8, -3.6, -1.5, 1.1, 3.2, 5.5];
         const ys = [2.4, 3.1, 3.8, 2.9, 4.3, 3.4];
-        const rs = [0.86, 1.08, 0.8, 1.32, 1.0, 0.92];
+        const rs = [1.05, 1.28, 0.98, 1.55, 1.18, 1.12];
         const speed = [0.85, 1.25, 1.0, 1.55, 0.95, 1.35];
         const zs = [16, 18, 20, 22, 24, 26];
         const nearZ = Math.min(...zs);
         const farZ = Math.max(...zs);
+
         state.gameOver = false;
         state.gameOverText = "";
         state.announceSrc = "";
@@ -365,6 +450,7 @@
         state.balls = [];
         state.score = 0;
         state.targets = [];
+
         const selectedPortraits = shuffled(portraits).slice(0, 6);
         for (let i = 0; i < 6; i++) {
           const z = zs[i];
@@ -380,10 +466,10 @@
             vx: 0,
             vy: 0,
             mass: 1.1 + rs[i] * 2.0,
-            sx: (1.8 + i * 0.34) * (i % 2 ? -1 : 1),
-            sy: 0.85 + i * 0.14,
-            wx: speed[i] * 1.75,
-            wy: speed[i] * 1.35,
+            sx: (2.2 + i * 0.45) * (i % 2 ? -1 : 1),
+            sy: 1.1 + i * 0.2,
+            wx: speed[i] * 2.3,
+            wy: speed[i] * 1.8,
             phase: i * 0.8,
             anchorX: xs[i],
             anchorY: ys[i] + rs[i],
@@ -397,40 +483,22 @@
         }
       }
 
-      function clampMag(x, y, max) {
-        const m = Math.hypot(x, y);
-        if (m <= max || m === 0) return { x, y, m };
-        const k = max / m;
-        return { x: x * k, y: y * k, m: max };
-      }
-
-      function screenToDesign(px, py) {
-        return {
-          x: (px - state.view.x) / state.view.scale,
-          y: (py - state.view.y) / state.view.scale,
-        };
-      }
-
       function pointerPos(e) {
         const p = e.touches ? e.touches[0] : e;
-        return screenToDesign(p.clientX, p.clientY);
+        return { x: p.clientX, y: p.clientY };
+      }
+      function clampMag(x, y, max) {
+        const m = Math.hypot(x, y);
+        if (m <= max || m === 0) return { x, y };
+        const k = max / m;
+        return { x: x * k, y: y * k };
       }
       function isFireLocked() {
         return announce.classList.contains("show");
       }
 
       function spawnBall(x, y, z, vx, vy, vz) {
-        state.balls.push({
-          x,
-          y,
-          z,
-          vx,
-          vy,
-          vz,
-          r: 0.28,
-          alive: true,
-          hitCd: 0,
-        });
+        state.balls.push({ x, y, z, vx, vy, vz, r: 0.28, alive: true, hitCd: 0 });
       }
 
       function onDown(e) {
@@ -457,13 +525,12 @@
         if (!gunScr.ok) return;
         const dx = p.x - gunScr.sx;
         const dy = p.y - gunScr.sy;
-        const c = clampMag(dx, dy, 320);
-        const mag01 = Math.hypot(c.x, c.y) / 320;
+        const c = clampMag(dx, dy, 260);
+        const mag01 = Math.hypot(c.x, c.y) / 260;
 
-        // 左右偏航、上下俯仰；枪位不变，只改瞄准角度。
-        state.aim.yaw = clamp((c.x / 320) * 1.0, -0.95, 0.95);
-        state.aim.pitch = clamp(0.22 + (-c.y / 320) * 0.9, -0.1, 0.95);
-        state.aim.power = clamp(0.18 + mag01 * 0.82, 0.18, 1.0);
+        state.aim.yaw = clamp((c.x / 260) * 1.0, -0.95, 0.95);
+        state.aim.pitch = clamp(0.22 + (-c.y / 260) * 0.9, -0.1, 0.95);
+        state.aim.power = clamp(0.2 + mag01 * 0.8, 0.2, 1.0);
       }
 
       function onUp(e) {
@@ -477,14 +544,7 @@
 
         const shot = getAimShot();
         const pose = getGunPose();
-        spawnBall(
-          pose.muzzle.x,
-          pose.muzzle.y,
-          pose.muzzle.z,
-          shot.dir.x * shot.speed,
-          shot.dir.y * shot.speed,
-          shot.dir.z * shot.speed
-        );
+        spawnBall(pose.muzzle.x, pose.muzzle.y, pose.muzzle.z, shot.dir.x * shot.speed, shot.dir.y * shot.speed, shot.dir.z * shot.speed);
       }
 
       function update(dt, t) {
@@ -537,7 +597,6 @@
           ball.y += ball.vy * dt;
           ball.z += ball.vz * dt;
 
-          // 地面 y=0, 重力向地面拉。
           if (ball.y - ball.r < 0) {
             ball.y = ball.r;
             ball.vy = Math.abs(ball.vy) * world.bounce;
@@ -546,7 +605,6 @@
             if (Math.abs(ball.vy) < 1.1 && Math.hypot(ball.vx, ball.vz) < 1.0) ball.alive = false;
           }
 
-          // 左右边界。
           if (ball.x - ball.r < -7) {
             ball.x = -7 + ball.r;
             ball.vx = Math.abs(ball.vx) * world.wallBounce;
@@ -555,7 +613,6 @@
             ball.vx = -Math.abs(ball.vx) * world.wallBounce;
           }
 
-          // 前方边界。
           if (ball.z > 35) {
             ball.z = 35;
             ball.vz = -Math.abs(ball.vz) * world.wallBounce;
@@ -597,7 +654,6 @@
             ball.vy += j * ny * invBall;
             ball.vz += j * nz * invBall;
 
-            // 活着时目标距离固定: 不吃 z 冲量。
             target.vx -= j * nx * invTar;
             target.vy -= j * ny * invTar;
 
@@ -615,7 +671,6 @@
                 state.drag.active = false;
                 target.dead = true;
                 target.vx = target.vx - j * nx * invTar * 0.6;
-                // 死亡瞬间不再向上弹，随后完全由重力下落
                 target.vy = Math.min(0, target.vy - j * ny * invTar);
                 target.vz = -j * nz * invTar;
                 state.announceSrc = target.portrait.src;
@@ -627,63 +682,6 @@
         }
 
         state.balls = state.balls.filter((b) => b.alive || (b.z < 42 && b.y > -2));
-      }
-
-      function worldToScreen(x, y, z) {
-        const dx = x - cam.x;
-        const dy = y - cam.y;
-        const dz = z - cam.z;
-        if (dz <= cam.near) return { ok: false };
-        const f = cam.focal / dz;
-        return {
-          ok: true,
-          sx: state.view.cx + dx * f,
-          sy: state.view.cy - dy * f,
-          scale: f / 180,
-          depth: dz,
-        };
-      }
-
-      function toClipX(x) {
-        const sx = state.view.x + x * state.view.scale;
-        return (sx / state.screenW) * 2 - 1;
-      }
-      function toClipY(y) {
-        const sy = state.view.y + y * state.view.scale;
-        return 1 - (sy / state.screenH) * 2;
-      }
-      function v(arr, x, y, c) {
-        arr.push(toClipX(x), toClipY(y), c[0], c[1], c[2], c[3] == null ? 1 : c[3]);
-      }
-      function tri(arr, x1, y1, x2, y2, x3, y3, c) {
-        v(arr, x1, y1, c);
-        v(arr, x2, y2, c);
-        v(arr, x3, y3, c);
-      }
-      function triV(arr, p1, c1, p2, c2, p3, c3) {
-        v(arr, p1.x, p1.y, c1);
-        v(arr, p2.x, p2.y, c2);
-        v(arr, p3.x, p3.y, c3);
-      }
-      function rect(arr, x, y, w, h, c) {
-        tri(arr, x, y, x + w, y, x + w, y + h, c);
-        tri(arr, x, y, x + w, y + h, x, y + h, c);
-      }
-      function line(arr, x1, y1, x2, y2, w, c) {
-        const dx = x2 - x1;
-        const dy = y2 - y1;
-        const m = Math.hypot(dx, dy) || 1;
-        const nx = (-dy / m) * w * 0.5;
-        const ny = (dx / m) * w * 0.5;
-        tri(arr, x1 + nx, y1 + ny, x2 + nx, y2 + ny, x2 - nx, y2 - ny, c);
-        tri(arr, x1 + nx, y1 + ny, x2 - nx, y2 - ny, x1 - nx, y1 - ny, c);
-      }
-      function circle(arr, x, y, r, c, seg = 20) {
-        for (let i = 0; i < seg; i++) {
-          const a0 = (i / seg) * Math.PI * 2;
-          const a1 = ((i + 1) / seg) * Math.PI * 2;
-          tri(arr, x, y, x + Math.cos(a0) * r, y + Math.sin(a0) * r, x + Math.cos(a1) * r, y + Math.sin(a1) * r, c);
-        }
       }
 
       function normalize3(x, y, z) {
@@ -710,133 +708,97 @@
         };
       }
 
-      function shadeBlinn(pos, normal, base) {
-        const n = normalize3(normal.x, normal.y, normal.z);
-        const vdir = normalize3(cam.x - pos.x, cam.y - pos.y, cam.z - pos.z);
-        const ldir = normalize3(-directionalLight.dir.x, -directionalLight.dir.y, -directionalLight.dir.z);
-        const ndotl = Math.max(0, n.x * ldir.x + n.y * ldir.y + n.z * ldir.z);
-        const h = normalize3(ldir.x + vdir.x, ldir.y + vdir.y, ldir.z + vdir.z);
-        const ndoth = Math.max(0, n.x * h.x + n.y * h.y + n.z * h.z);
-        const diff = ndotl * directionalLight.intensity;
-        const spec = Math.pow(ndoth, 28) * 0.55;
-
-        let r = base[0] * ambientLight.color[0] * ambientLight.intensity;
-        let g = base[1] * ambientLight.color[1] * ambientLight.intensity;
-        let b = base[2] * ambientLight.color[2] * ambientLight.intensity;
-        r += directionalLight.color[0] * (base[0] * diff + spec);
-        g += directionalLight.color[1] * (base[1] * diff + spec);
-        b += directionalLight.color[2] * (base[2] * diff + spec);
-        return [Math.min(1, r), Math.min(1, g), Math.min(1, b)];
+      function identity4() {
+        return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
       }
-
-      function shadeWard(pos, normal, base, roughness = 0.38) {
-        const n = normalize3(normal.x, normal.y, normal.z);
-        const v = normalize3(cam.x - pos.x, cam.y - pos.y, cam.z - pos.z);
-        const nv = Math.max(0.0001, dot3(n, v));
-        const lv = normalize3(-directionalLight.dir.x, -directionalLight.dir.y, -directionalLight.dir.z);
-        const nl = Math.max(0.0001, dot3(n, lv));
-        const h = normalize3(lv.x + v.x, lv.y + v.y, lv.z + v.z);
-        const nh = Math.max(0.0001, dot3(n, h));
-        const theta = Math.acos(Math.min(1, nh));
-        const tanTheta = Math.tan(theta);
-        const a2 = roughness * roughness;
-        const ward = Math.exp(-(tanTheta * tanTheta) / a2) / (4 * Math.PI * a2 * Math.sqrt(nl * nv));
-        const diff = nl * directionalLight.intensity;
-        const spec = ward * 0.75;
-        let r = base[0] * ambientLight.color[0] * ambientLight.intensity;
-        let g = base[1] * ambientLight.color[1] * ambientLight.intensity;
-        let b = base[2] * ambientLight.color[2] * ambientLight.intensity;
-        r += directionalLight.color[0] * (base[0] * diff + spec);
-        g += directionalLight.color[1] * (base[1] * diff + spec);
-        b += directionalLight.color[2] * (base[2] * diff + spec);
-        return [Math.min(1, r), Math.min(1, g), Math.min(1, b)];
-      }
-
-      function drawLitSphereWard(arr, ball, baseColor) {
-        const c = { x: ball.x, y: ball.y, z: ball.z };
-        const toCam = normalize3(cam.x - c.x, cam.y - c.y, cam.z - c.z);
-        let right = normalize3(toCam.z, 0, -toCam.x);
-        if (Math.hypot(right.x, right.y, right.z) < 0.0001) right = { x: 1, y: 0, z: 0 };
-        let upVec = cross3(right, toCam);
-        let up = normalize3(upVec.x, upVec.y, upVec.z);
-
-        const center = worldToScreen(c.x, c.y, c.z);
-        if (!center.ok) return;
-        const centerColor = shadeWard(add3(c, mul3(toCam, ball.r)), toCam, baseColor, 0.34);
-
-        const seg = 24;
-        for (let i = 0; i < seg; i++) {
-          const a0 = (i / seg) * Math.PI * 2;
-          const a1 = ((i + 1) / seg) * Math.PI * 2;
-          const rim0 = add3(mul3(right, Math.cos(a0)), mul3(up, Math.sin(a0)));
-          const rim1 = add3(mul3(right, Math.cos(a1)), mul3(up, Math.sin(a1)));
-
-          const p0w = add3(c, mul3(rim0, ball.r));
-          const p1w = add3(c, mul3(rim1, ball.r));
-          const p0 = worldToScreen(p0w.x, p0w.y, p0w.z);
-          const p1 = worldToScreen(p1w.x, p1w.y, p1w.z);
-          if (!p0.ok || !p1.ok) continue;
-
-          const n0 = normalize3(rim0.x * 0.85 + toCam.x * 0.55, rim0.y * 0.85 + toCam.y * 0.55, rim0.z * 0.85 + toCam.z * 0.55);
-          const n1 = normalize3(rim1.x * 0.85 + toCam.x * 0.55, rim1.y * 0.85 + toCam.y * 0.55, rim1.z * 0.85 + toCam.z * 0.55);
-          const c0 = shadeWard(add3(c, mul3(n0, ball.r)), n0, baseColor, 0.34);
-          const c1 = shadeWard(add3(c, mul3(n1, ball.r)), n1, baseColor, 0.34);
-          triV(arr, { x: center.sx, y: center.sy }, centerColor, { x: p0.sx, y: p0.sy }, c0, { x: p1.sx, y: p1.sy }, c1);
+      function mul4(a, b) {
+        const o = new Float32Array(16);
+        for (let c = 0; c < 4; c++) {
+          for (let r = 0; r < 4; r++) {
+            o[c * 4 + r] =
+              a[0 * 4 + r] * b[c * 4 + 0] +
+              a[1 * 4 + r] * b[c * 4 + 1] +
+              a[2 * 4 + r] * b[c * 4 + 2] +
+              a[3 * 4 + r] * b[c * 4 + 3];
+          }
         }
+        return o;
       }
-
-      function drawPrismBlinn(arr, center, axisDir, length, width, height, baseColor) {
-        const axis = normalize3(axisDir.x, axisDir.y, axisDir.z);
-        let refUp = { x: 0, y: 1, z: 0 };
-        if (Math.abs(dot3(axis, refUp)) > 0.93) refUp = { x: 1, y: 0, z: 0 };
-        const rightRaw = cross3(axis, refUp);
-        const right = normalize3(rightRaw.x, rightRaw.y, rightRaw.z);
-        const upRaw = cross3(right, axis);
-        const up = normalize3(upRaw.x, upRaw.y, upRaw.z);
-        const hf = length * 0.5;
-        const hw = width * 0.5;
-        const hh = height * 0.5;
-
-        const faceCenter = (f, s = 0) => add3(center, mul3(axis, f * hf + s));
-        const p = (f, rw, uh) => add3(add3(faceCenter(f), mul3(right, rw * hw)), mul3(up, uh * hh));
-
-        const F1 = p(1, -1, -1), F2 = p(1, 1, -1), F3 = p(1, 1, 1), F4 = p(1, -1, 1);
-        const B1 = p(-1, -1, -1), B2 = p(-1, 1, -1), B3 = p(-1, 1, 1), B4 = p(-1, -1, 1);
-
-        const faces = [
-          { verts: [F1, F2, F3, F4], n: axis },
-          { verts: [B2, B1, B4, B3], n: mul3(axis, -1) },
-          { verts: [B1, F1, F4, B4], n: mul3(right, -1) },
-          { verts: [F2, B2, B3, F3], n: right },
-          { verts: [B4, F4, F3, B3], n: up },
-          { verts: [B1, B2, F2, F1], n: mul3(up, -1) },
-        ];
-
-        faces.sort((a, b) => {
-          const za = (a.verts[0].z + a.verts[1].z + a.verts[2].z + a.verts[3].z) * 0.25;
-          const zb = (b.verts[0].z + b.verts[1].z + b.verts[2].z + b.verts[3].z) * 0.25;
-          return zb - za;
-        });
-
-        for (const face of faces) {
-          const s = face.verts.map((q) => worldToScreen(q.x, q.y, q.z));
-          if (!s[0].ok || !s[1].ok || !s[2].ok || !s[3].ok) continue;
-          const c1 = shadeBlinn(face.verts[0], face.n, baseColor);
-          const c2 = shadeBlinn(face.verts[1], face.n, baseColor);
-          const c3 = shadeBlinn(face.verts[2], face.n, baseColor);
-          const c4 = shadeBlinn(face.verts[3], face.n, baseColor);
-          triV(arr, { x: s[0].sx, y: s[0].sy }, c1, { x: s[1].sx, y: s[1].sy }, c2, { x: s[2].sx, y: s[2].sy }, c3);
-          triV(arr, { x: s[0].sx, y: s[0].sy }, c1, { x: s[2].sx, y: s[2].sy }, c3, { x: s[3].sx, y: s[3].sy }, c4);
-        }
+      function perspective4(fovY, aspect, near, far) {
+        const f = 1.0 / Math.tan(fovY * 0.5);
+        const nf = 1.0 / (near - far);
+        return new Float32Array([
+          f / aspect,
+          0,
+          0,
+          0,
+          0,
+          f,
+          0,
+          0,
+          0,
+          0,
+          (far + near) * nf,
+          -1,
+          0,
+          0,
+          2 * far * near * nf,
+          0,
+        ]);
+      }
+      function lookAt4(eye, target, up) {
+        const z = normalize3(eye.x - target.x, eye.y - target.y, eye.z - target.z);
+        const x = normalize3(cross3(up, z).x, cross3(up, z).y, cross3(up, z).z);
+        const y = cross3(z, x);
+        return new Float32Array([
+          x.x,
+          y.x,
+          z.x,
+          0,
+          x.y,
+          y.y,
+          z.y,
+          0,
+          x.z,
+          y.z,
+          z.z,
+          0,
+          -dot3(x, eye),
+          -dot3(y, eye),
+          -dot3(z, eye),
+          1,
+        ]);
+      }
+      function mulMat4Vec4(m, v) {
+        return {
+          x: m[0] * v.x + m[4] * v.y + m[8] * v.z + m[12] * v.w,
+          y: m[1] * v.x + m[5] * v.y + m[9] * v.z + m[13] * v.w,
+          z: m[2] * v.x + m[6] * v.y + m[10] * v.z + m[14] * v.w,
+          w: m[3] * v.x + m[7] * v.y + m[11] * v.z + m[15] * v.w,
+        };
+      }
+      function updateViewProj() {
+        const aspect = Math.max(0.1, canvas.width / canvas.height);
+        const proj = perspective4(cam.fovY, aspect, cam.near, cam.far);
+        const view = lookAt4(cam.pos, cam.target, cam.up);
+        state.viewProj = mul4(proj, view);
+      }
+      function worldToScreen(x, y, z) {
+        const c = mulMat4Vec4(state.viewProj, { x, y, z, w: 1 });
+        if (c.w <= 0.0001) return { ok: false };
+        const ndcX = c.x / c.w;
+        const ndcY = c.y / c.w;
+        const sx = (ndcX * 0.5 + 0.5) * state.screenW;
+        const sy = (1 - (ndcY * 0.5 + 0.5)) * state.screenH;
+        return { ok: true, sx, sy, ndcZ: c.z / c.w };
       }
 
       function getAimShot() {
         const cosP = Math.cos(state.aim.pitch);
         const dir = normalize3(Math.sin(state.aim.yaw) * cosP, Math.sin(state.aim.pitch), Math.cos(state.aim.yaw) * cosP);
-        const speed = 28 + state.aim.power * 36;
+        const speed = 34 + state.aim.power * 40;
         return { dir, speed };
       }
-
       function getGunPose() {
         const { dir } = getAimShot();
         const rightRaw = cross3(dir, { x: 0, y: 1, z: 0 });
@@ -851,7 +813,184 @@
         return { gun, dir, right, up, receiverCenter, barrelCenter, muzzle };
       }
 
-      function drawGunModel(arr) {
+      function pushMeshVertex(arr, p, n, c) {
+        arr.push(p.x, p.y, p.z, n.x, n.y, n.z, c[0], c[1], c[2], c[3] == null ? 1 : c[3]);
+      }
+      function pushMeshTri(arr, p1, n1, c1, p2, n2, c2, p3, n3, c3) {
+        pushMeshVertex(arr, p1, n1, c1);
+        pushMeshVertex(arr, p2, n2, c2);
+        pushMeshVertex(arr, p3, n3, c3);
+      }
+      function pushMeshQuad(arr, p1, n1, c1, p2, n2, c2, p3, n3, c3, p4, n4, c4) {
+        pushMeshTri(arr, p1, n1, c1, p2, n2, c2, p3, n3, c3);
+        pushMeshTri(arr, p1, n1, c1, p3, n3, c3, p4, n4, c4);
+      }
+
+      function pushTexVertex(arr, p, n, c, uv) {
+        arr.push(p.x, p.y, p.z, n.x, n.y, n.z, c[0], c[1], c[2], c[3] == null ? 1 : c[3], uv[0], uv[1]);
+      }
+      function pushTexTri(arr, p1, n1, c1, uv1, p2, n2, c2, uv2, p3, n3, c3, uv3) {
+        pushTexVertex(arr, p1, n1, c1, uv1);
+        pushTexVertex(arr, p2, n2, c2, uv2);
+        pushTexVertex(arr, p3, n3, c3, uv3);
+      }
+
+      function addPrismMesh(arr, center, axisDir, length, width, height, col) {
+        const axis = normalize3(axisDir.x, axisDir.y, axisDir.z);
+        let refUp = { x: 0, y: 1, z: 0 };
+        if (Math.abs(dot3(axis, refUp)) > 0.93) refUp = { x: 1, y: 0, z: 0 };
+        const right = normalize3(cross3(axis, refUp).x, cross3(axis, refUp).y, cross3(axis, refUp).z);
+        const up = normalize3(cross3(right, axis).x, cross3(right, axis).y, cross3(right, axis).z);
+
+        const hf = length * 0.5;
+        const hw = width * 0.5;
+        const hh = height * 0.5;
+        const p = (f, rw, uh) => add3(add3(center, mul3(axis, f * hf)), add3(mul3(right, rw * hw), mul3(up, uh * hh)));
+
+        const F1 = p(1, -1, -1), F2 = p(1, 1, -1), F3 = p(1, 1, 1), F4 = p(1, -1, 1);
+        const B1 = p(-1, -1, -1), B2 = p(-1, 1, -1), B3 = p(-1, 1, 1), B4 = p(-1, -1, 1);
+
+        pushMeshQuad(arr, F1, axis, col, F2, axis, col, F3, axis, col, F4, axis, col);
+        pushMeshQuad(arr, B2, mul3(axis, -1), col, B1, mul3(axis, -1), col, B4, mul3(axis, -1), col, B3, mul3(axis, -1), col);
+        pushMeshQuad(arr, B1, mul3(right, -1), col, F1, mul3(right, -1), col, F4, mul3(right, -1), col, B4, mul3(right, -1), col);
+        pushMeshQuad(arr, F2, right, col, B2, right, col, B3, right, col, F3, right, col);
+        pushMeshQuad(arr, B4, up, col, F4, up, col, F3, up, col, B3, up, col);
+        pushMeshQuad(arr, B1, mul3(up, -1), col, B2, mul3(up, -1), col, F2, mul3(up, -1), col, F1, mul3(up, -1), col);
+      }
+
+      function addSphereMesh(arr, c, r, col, stacks = 10, slices = 16) {
+        for (let i = 0; i < stacks; i++) {
+          const v0 = i / stacks;
+          const v1 = (i + 1) / stacks;
+          const t0 = v0 * Math.PI;
+          const t1 = v1 * Math.PI;
+          for (let j = 0; j < slices; j++) {
+            const u0 = (j / slices) * Math.PI * 2;
+            const u1 = ((j + 1) / slices) * Math.PI * 2;
+            const n00 = { x: Math.sin(t0) * Math.cos(u0), y: Math.cos(t0), z: Math.sin(t0) * Math.sin(u0) };
+            const n10 = { x: Math.sin(t1) * Math.cos(u0), y: Math.cos(t1), z: Math.sin(t1) * Math.sin(u0) };
+            const n11 = { x: Math.sin(t1) * Math.cos(u1), y: Math.cos(t1), z: Math.sin(t1) * Math.sin(u1) };
+            const n01 = { x: Math.sin(t0) * Math.cos(u1), y: Math.cos(t0), z: Math.sin(t0) * Math.sin(u1) };
+            const p00 = add3(c, mul3(n00, r));
+            const p10 = add3(c, mul3(n10, r));
+            const p11 = add3(c, mul3(n11, r));
+            const p01 = add3(c, mul3(n01, r));
+            pushMeshTri(arr, p00, n00, col, p10, n10, col, p11, n11, col);
+            pushMeshTri(arr, p00, n00, col, p11, n11, col, p01, n01, col);
+          }
+        }
+      }
+
+      function addGround(meshArr) {
+        const xMin = -9;
+        const xMax = 9;
+        const zNear = -3;
+        const zFar = 35;
+        const base = [0.68, 0.76, 0.9, 1.0];
+
+        pushMeshQuad(
+          meshArr,
+          { x: xMin, y: 0, z: zNear },
+          { x: 0, y: 1, z: 0 },
+          base,
+          { x: xMax, y: 0, z: zNear },
+          { x: 0, y: 1, z: 0 },
+          base,
+          { x: xMax, y: 0, z: zFar },
+          { x: 0, y: 1, z: 0 },
+          base,
+          { x: xMin, y: 0, z: zFar },
+          { x: 0, y: 1, z: 0 },
+          base
+        );
+
+        const lineCol = [0.75, 0.84, 0.96, 0.92];
+        for (let z = 2; z <= 34; z += 2) {
+          addGroundLine(meshArr, { x: -8, y: 0.015, z }, { x: 8, y: 0.015, z }, 0.025, lineCol);
+        }
+        for (let x = -8; x <= 8; x += 1.5) {
+          addGroundLine(meshArr, { x, y: 0.015, z: 2 }, { x, y: 0.015, z: 34 }, 0.025, lineCol);
+        }
+      }
+      function addGroundLine(arr, a, b, w, col) {
+        const d = sub3(b, a);
+        const len = Math.hypot(d.x, d.y, d.z) || 1;
+        const dir = { x: d.x / len, y: d.y / len, z: d.z / len };
+        const right = normalize3(-dir.z, 0, dir.x);
+        const off = mul3(right, w * 0.5);
+        const p1 = add3(a, off);
+        const p2 = add3(b, off);
+        const p3 = sub3(b, off);
+        const p4 = sub3(a, off);
+        const n = { x: 0, y: 1, z: 0 };
+        pushMeshQuad(arr, p1, n, col, p2, n, col, p3, n, col, p4, n, col);
+      }
+
+      function addTargetShadow(arr, target) {
+        const ldir = normalize3(directionalLight.dir.x, directionalLight.dir.y, directionalLight.dir.z);
+        const t = target.y / Math.max(0.0001, -ldir.y);
+        const c = { x: target.x + ldir.x * t, y: 0.02, z: target.z + ldir.z * t };
+        const shadowR = target.r * (1.2 + Math.max(0.6, target.y) * 0.22);
+        const seg = 22;
+        const col = [0.1, 0.11, 0.14, 0.24];
+        for (let i = 0; i < seg; i++) {
+          const a0 = (i / seg) * Math.PI * 2;
+          const a1 = ((i + 1) / seg) * Math.PI * 2;
+          const p0 = { x: c.x + Math.cos(a0) * shadowR, y: c.y, z: c.z + Math.sin(a0) * shadowR };
+          const p1 = { x: c.x + Math.cos(a1) * shadowR, y: c.y, z: c.z + Math.sin(a1) * shadowR };
+          const n = { x: 0, y: 1, z: 0 };
+          pushMeshTri(arr, c, n, col, p0, n, col, p1, n, col);
+        }
+      }
+
+      function addTargetGeometry(meshArr, target) {
+        const seg = 36;
+        const thickness = Math.max(0.26, target.r * 0.42);
+        const zFront = target.z - thickness * 0.5;
+        const zBack = target.z + thickness * 0.5;
+        const hp01 = target.maxHp > 0 ? target.hp / target.maxHp : 0;
+
+        const bodyCol = target.hitTimer > 0 ? [0.95, 0.45, 0.34, 1] : [0.72, 0.46 + hp01 * 0.14, 0.38 + hp01 * 0.1, 1];
+        const sideCol = [bodyCol[0] * 0.64, bodyCol[1] * 0.64, bodyCol[2] * 0.64, 1];
+        const backCol = [bodyCol[0] * 0.52, bodyCol[1] * 0.52, bodyCol[2] * 0.52, 1];
+
+        for (let i = 0; i < seg; i++) {
+          const a0 = (i / seg) * Math.PI * 2;
+          const a1 = ((i + 1) / seg) * Math.PI * 2;
+          const nx0 = Math.cos(a0);
+          const ny0 = Math.sin(a0);
+          const nx1 = Math.cos(a1);
+          const ny1 = Math.sin(a1);
+
+          const pF0 = { x: target.x + nx0 * target.r, y: target.y + ny0 * target.r, z: zFront };
+          const pF1 = { x: target.x + nx1 * target.r, y: target.y + ny1 * target.r, z: zFront };
+          const pB0 = { x: target.x + nx0 * target.r, y: target.y + ny0 * target.r, z: zBack };
+          const pB1 = { x: target.x + nx1 * target.r, y: target.y + ny1 * target.r, z: zBack };
+          const n0 = { x: nx0, y: ny0, z: 0 };
+          const n1 = { x: nx1, y: ny1, z: 0 };
+          pushMeshQuad(meshArr, pF0, n0, sideCol, pB0, n0, sideCol, pB1, n1, sideCol, pF1, n1, sideCol);
+
+          const cBack = { x: target.x, y: target.y, z: zBack };
+          const nBack = { x: 0, y: 0, z: 1 };
+          pushMeshTri(meshArr, cBack, nBack, backCol, pB1, nBack, backCol, pB0, nBack, backCol);
+        }
+
+        const rimCol = [0.96, 0.96, 0.96, 1];
+        const rimOuter = target.r * 1.05;
+        const rimInner = target.r * 0.985;
+        const nRim = { x: 0, y: 0, z: -1 };
+        for (let i = 0; i < seg; i++) {
+          const a0 = (i / seg) * Math.PI * 2;
+          const a1 = ((i + 1) / seg) * Math.PI * 2;
+          const o0 = { x: target.x + Math.cos(a0) * rimOuter, y: target.y + Math.sin(a0) * rimOuter, z: zFront - 0.002 };
+          const o1 = { x: target.x + Math.cos(a1) * rimOuter, y: target.y + Math.sin(a1) * rimOuter, z: zFront - 0.002 };
+          const i0 = { x: target.x + Math.cos(a0) * rimInner, y: target.y + Math.sin(a0) * rimInner, z: zFront - 0.002 };
+          const i1 = { x: target.x + Math.cos(a1) * rimInner, y: target.y + Math.sin(a1) * rimInner, z: zFront - 0.002 };
+          pushMeshQuad(meshArr, o0, nRim, rimCol, o1, nRim, rimCol, i1, nRim, rimCol, i0, nRim, rimCol);
+        }
+      }
+
+      function addGun(meshArr) {
         const pose = getGunPose();
         const dir = pose.dir;
         const up = pose.up;
@@ -861,30 +1000,45 @@
         const gripAxis = normalize3(dir.x * 0.2, -0.95, dir.z * 0.2);
         const gripCenter = add3(gun, add3(mul3(dir, -0.2), mul3(up, -0.68)));
 
-        drawPrismBlinn(arr, receiverCenter, dir, 1.6, 0.52, 0.36, [0.24, 0.3, 0.4]);
-        drawPrismBlinn(arr, barrelCenter, dir, 2.4, 0.26, 0.22, [0.2, 0.25, 0.34]);
-        drawPrismBlinn(arr, gripCenter, gripAxis, 1.25, 0.34, 0.52, [0.36, 0.24, 0.17]);
+        addPrismMesh(meshArr, receiverCenter, dir, 1.6, 0.52, 0.36, [0.24, 0.3, 0.4, 1]);
+        addPrismMesh(meshArr, barrelCenter, dir, 2.4, 0.26, 0.22, [0.2, 0.25, 0.34, 1]);
+        addPrismMesh(meshArr, gripCenter, gripAxis, 1.25, 0.34, 0.52, [0.36, 0.24, 0.17, 1]);
 
         const guardCenter = add3(gun, add3(mul3(dir, 0.1), mul3(up, -0.2)));
-        drawPrismBlinn(arr, guardCenter, dir, 0.56, 0.2, 0.12, [0.15, 0.19, 0.26]);
+        addPrismMesh(meshArr, guardCenter, dir, 0.56, 0.2, 0.12, [0.15, 0.19, 0.26, 1]);
 
         const sightBack = add3(receiverCenter, add3(mul3(dir, 0.5), mul3(up, 0.28)));
         const sightFront = add3(barrelCenter, add3(mul3(dir, 1.0), mul3(up, 0.25)));
-        drawPrismBlinn(arr, sightBack, up, 0.16, 0.08, 0.12, [0.28, 0.34, 0.45]);
-        drawPrismBlinn(arr, sightFront, up, 0.2, 0.08, 0.16, [0.3, 0.36, 0.48]);
+        addPrismMesh(meshArr, sightBack, up, 0.16, 0.08, 0.12, [0.28, 0.34, 0.45, 1]);
+        addPrismMesh(meshArr, sightFront, up, 0.2, 0.08, 0.16, [0.3, 0.36, 0.48, 1]);
       }
 
-      function drawAimParabolaDashed(lines) {
-        const segments = getAimPathScreenSegments();
-        if (!segments.length) return;
-        for (let i = 0; i < segments.length; i++) {
-          if (i % 2 !== 0) continue;
-          const s = segments[i];
-          line(lines, s.x1, s.y1, s.x2, s.y2, 4, [1.0, 0.2, 0.2, 0.42]);
-        }
+      function toClipX(x) {
+        return (x / state.screenW) * 2 - 1;
+      }
+      function toClipY(y) {
+        return 1 - (y / state.screenH) * 2;
+      }
+      function addLine2D(arr, x1, y1, x2, y2, w, c) {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const m = Math.hypot(dx, dy) || 1;
+        const nx = (-dy / m) * w * 0.5;
+        const ny = (dx / m) * w * 0.5;
+        const p1 = [toClipX(x1 + nx), toClipY(y1 + ny)];
+        const p2 = [toClipX(x2 + nx), toClipY(y2 + ny)];
+        const p3 = [toClipX(x2 - nx), toClipY(y2 - ny)];
+        const p4 = [toClipX(x1 - nx), toClipY(y1 - ny)];
+        pushLineTri(arr, p1, c, p2, c, p3, c);
+        pushLineTri(arr, p1, c, p3, c, p4, c);
+      }
+      function pushLineTri(arr, p1, c1, p2, c2, p3, c3) {
+        arr.push(p1[0], p1[1], c1[0], c1[1], c1[2], c1[3]);
+        arr.push(p2[0], p2[1], c2[0], c2[1], c2[2], c2[3]);
+        arr.push(p3[0], p3[1], c3[0], c3[1], c3[2], c3[3]);
       }
 
-      function getAimPathScreenSegments() {
+      function buildAimSegments() {
         if (!state.drag.active) return [];
         const shot = getAimShot();
         const pose = getGunPose();
@@ -892,8 +1046,7 @@
         let v3 = { x: shot.dir.x * shot.speed, y: shot.dir.y * shot.speed, z: shot.dir.z * shot.speed };
         const dt = 0.07;
         const steps = 46;
-        const segments = [];
-
+        const out = [];
         for (let i = 0; i < steps; i++) {
           const prev = { x: p.x, y: p.y, z: p.z };
           v3.y += world.gravity * dt;
@@ -904,230 +1057,167 @@
           p.y += v3.y * dt;
           p.z += v3.z * dt;
           if (p.y < 0) p.y = 0;
-
           const s0 = worldToScreen(prev.x, prev.y, prev.z);
           const s1 = worldToScreen(p.x, p.y, p.z);
-          if (s0.ok && s1.ok) {
-            segments.push({
-              // 这里保持设计坐标（与 WebGL 渲染坐标一致）
-              x1: s0.sx,
-              y1: s0.sy,
-              x2: s1.sx,
-              y2: s1.sy,
-            });
-          }
+          if (s0.ok && s1.ok) out.push({ x1: s0.sx, y1: s0.sy, x2: s1.sx, y2: s1.sy });
           if (p.y <= 0) break;
         }
-        return segments;
+        return out;
       }
 
-      function drawLitDisk(arr, target, baseColor) {
-        const seg = 28;
-        const thickness = Math.max(0.22, target.r * 0.38);
-        const zFront = target.z - thickness * 0.5;
-        const zBack = target.z + thickness * 0.5;
+      function renderScene() {
+        updateViewProj();
 
-        const centerF = worldToScreen(target.x, target.y, zFront);
-        if (!centerF.ok) return;
+        const meshVerts = [];
+        const shadowVerts = [];
 
-        // 侧面：用圆柱侧法线做 Blinn 光照，表现厚度。
-        for (let i = 0; i < seg; i++) {
-          const a0 = (i / seg) * Math.PI * 2;
-          const a1 = ((i + 1) / seg) * Math.PI * 2;
-          const nx0 = Math.cos(a0);
-          const ny0 = Math.sin(a0);
-          const nx1 = Math.cos(a1);
-          const ny1 = Math.sin(a1);
+        addGround(meshVerts);
 
-          const wf0 = { x: target.x + nx0 * target.r, y: target.y + ny0 * target.r, z: zFront };
-          const wf1 = { x: target.x + nx1 * target.r, y: target.y + ny1 * target.r, z: zFront };
-          const wb0 = { x: target.x + nx0 * target.r, y: target.y + ny0 * target.r, z: zBack };
-          const wb1 = { x: target.x + nx1 * target.r, y: target.y + ny1 * target.r, z: zBack };
-
-          const sf0 = worldToScreen(wf0.x, wf0.y, wf0.z);
-          const sf1 = worldToScreen(wf1.x, wf1.y, wf1.z);
-          const sb0 = worldToScreen(wb0.x, wb0.y, wb0.z);
-          const sb1 = worldToScreen(wb1.x, wb1.y, wb1.z);
-          if (!sf0.ok || !sf1.ok || !sb0.ok || !sb1.ok) continue;
-
-          const cF0 = shadeBlinn(wf0, { x: nx0, y: ny0, z: 0 }, [baseColor[0] * 0.55, baseColor[1] * 0.55, baseColor[2] * 0.55]);
-          const cF1 = shadeBlinn(wf1, { x: nx1, y: ny1, z: 0 }, [baseColor[0] * 0.55, baseColor[1] * 0.55, baseColor[2] * 0.55]);
-          const cB0 = shadeBlinn(wb0, { x: nx0, y: ny0, z: 0 }, [baseColor[0] * 0.45, baseColor[1] * 0.45, baseColor[2] * 0.45]);
-          const cB1 = shadeBlinn(wb1, { x: nx1, y: ny1, z: 0 }, [baseColor[0] * 0.45, baseColor[1] * 0.45, baseColor[2] * 0.45]);
-
-          triV(arr, sf0, cF0, sb0, cB0, sb1, cB1);
-          triV(arr, sf0, cF0, sb1, cB1, sf1, cF1);
+        for (const t of state.targets) {
+          addTargetShadow(shadowVerts, t);
         }
 
-        // 前面：用略弯法线产生高光，不是纯平面色。
-        const centerColor = shadeBlinn({ x: target.x, y: target.y, z: zFront }, { x: 0, y: 0, z: -1 }, [baseColor[0] * 1.06, baseColor[1] * 1.06, baseColor[2] * 1.06]);
-        for (let i = 0; i < seg; i++) {
-          const a0 = (i / seg) * Math.PI * 2;
-          const a1 = ((i + 1) / seg) * Math.PI * 2;
-          const nx0 = Math.cos(a0);
-          const ny0 = Math.sin(a0);
-          const nx1 = Math.cos(a1);
-          const ny1 = Math.sin(a1);
-
-          const w0 = { x: target.x + nx0 * target.r, y: target.y + ny0 * target.r, z: zFront };
-          const w1 = { x: target.x + nx1 * target.r, y: target.y + ny1 * target.r, z: zFront };
-          const s0 = worldToScreen(w0.x, w0.y, w0.z);
-          const s1 = worldToScreen(w1.x, w1.y, w1.z);
-          if (!s0.ok || !s1.ok) continue;
-
-          const n0 = normalize3(nx0 * 0.42, ny0 * 0.42, -1);
-          const n1 = normalize3(nx1 * 0.42, ny1 * 0.42, -1);
-          const c0 = shadeBlinn(w0, n0, baseColor);
-          const c1 = shadeBlinn(w1, n1, baseColor);
-          triV(arr, { x: centerF.sx, y: centerF.sy }, centerColor, { x: s0.sx, y: s0.sy }, c0, { x: s1.sx, y: s1.sy }, c1);
-        }
-      }
-
-      function shadeGround(pos, base) {
-        const n = { x: 0, y: 1, z: 0 };
-        const ldir = normalize3(-directionalLight.dir.x, -directionalLight.dir.y, -directionalLight.dir.z);
-        const ndotl = Math.max(0, dot3(n, ldir));
-        const diff = ndotl * directionalLight.intensity * 1.15;
-        let r = base[0] * ambientLight.color[0] * ambientLight.intensity;
-        let g = base[1] * ambientLight.color[1] * ambientLight.intensity;
-        let b = base[2] * ambientLight.color[2] * ambientLight.intensity;
-        r += directionalLight.color[0] * base[0] * diff;
-        g += directionalLight.color[1] * base[1] * diff;
-        b += directionalLight.color[2] * base[2] * diff;
-        const fog = clamp((pos.z - 4) / 36, 0, 1);
-        r = r * (1 - fog * 0.35) + 0.62 * fog * 0.35;
-        g = g * (1 - fog * 0.35) + 0.7 * fog * 0.35;
-        b = b * (1 - fog * 0.35) + 0.84 * fog * 0.35;
-        return [Math.min(1, r), Math.min(1, g), Math.min(1, b), 1];
-      }
-
-      function drawLitGround(tris, lines) {
-        const xMin = -9;
-        const xMax = 9;
-        const zNear = -3;
-        const zFar = 35;
-        const xStep = 1.5;
-        const zStep = 2.5;
-        const base = [0.62, 0.7, 0.84];
-
-        for (let z = zNear; z < zFar; z += zStep) {
-          for (let x = xMin; x < xMax; x += xStep) {
-            const p00w = { x, y: 0, z };
-            const p10w = { x: x + xStep, y: 0, z };
-            const p11w = { x: x + xStep, y: 0, z: z + zStep };
-            const p01w = { x, y: 0, z: z + zStep };
-            const p00 = worldToScreen(p00w.x, p00w.y, p00w.z);
-            const p10 = worldToScreen(p10w.x, p10w.y, p10w.z);
-            const p11 = worldToScreen(p11w.x, p11w.y, p11w.z);
-            const p01 = worldToScreen(p01w.x, p01w.y, p01w.z);
-            if (!p00.ok || !p10.ok || !p11.ok || !p01.ok) continue;
-
-            const c00 = shadeGround(p00w, base);
-            const c10 = shadeGround(p10w, base);
-            const c11 = shadeGround(p11w, base);
-            const c01 = shadeGround(p01w, base);
-            triV(tris, { x: p00.sx, y: p00.sy }, c00, { x: p10.sx, y: p10.sy }, c10, { x: p11.sx, y: p11.sy }, c11);
-            triV(tris, { x: p00.sx, y: p00.sy }, c00, { x: p11.sx, y: p11.sy }, c11, { x: p01.sx, y: p01.sy }, c01);
-          }
+        for (const b of state.balls) {
+          if (!b.alive) continue;
+          addSphereMesh(meshVerts, { x: b.x, y: b.y, z: b.z }, b.r, [0.18, 0.22, 0.3, 1], 10, 16);
         }
 
-        for (let z = 2; z <= 34; z += 4) {
-          const l = worldToScreen(-8, 0, z);
-          const r = worldToScreen(8, 0, z);
-          if (l.ok && r.ok) line(lines, l.sx, l.sy, r.sx, r.sy, 1.4, [0.66, 0.76, 0.92, 0.75]);
-        }
-        for (let x = -8; x <= 8; x += 2) {
-          const f = worldToScreen(x, 0, 2);
-          const b = worldToScreen(x, 0, 34);
-          if (f.ok && b.ok) line(lines, f.sx, f.sy, b.sx, b.sy, 1.1, [0.66, 0.76, 0.92, 0.72]);
-        }
-      }
-
-      function drawTargetShadows(tris, target) {
-        const ldir = normalize3(directionalLight.dir.x, directionalLight.dir.y, directionalLight.dir.z);
-        const t = target.y / Math.max(0.0001, -ldir.y);
-        const shW = { x: target.x + ldir.x * t, y: 0, z: target.z + ldir.z * t };
-        const sh = worldToScreen(shW.x, 0.02, shW.z);
-        if (!sh.ok) return;
-        const distY = Math.max(0.6, target.y);
-        const shadowR = target.r * sh.scale * 180 * (1.2 + distY * 0.22);
-        circle(tris, sh.sx, sh.sy, shadowR, [0.05, 0.06, 0.08, 0.22], 20);
-      }
-
-      function render() {
-        const tris = [];
-        const lines = [];
-
-        rect(tris, 0, 0, design.w, design.h, [0.88, 0.92, 1.0]);
-
-        const farL = worldToScreen(-9, 0, 35);
-        const farR = worldToScreen(9, 0, 35);
-        const nearL = worldToScreen(-9, 0, -3);
-        const nearR = worldToScreen(9, 0, -3);
-        if (farL.ok && farR.ok && nearL.ok && nearR.ok) {
-          tri(tris, farL.sx, farL.sy, farR.sx, farR.sy, nearR.sx, nearR.sy, [0.72, 0.79, 0.9]);
-          tri(tris, farL.sx, farL.sy, nearR.sx, nearR.sy, nearL.sx, nearL.sy, [0.72, 0.79, 0.9]);
-          line(lines, farL.sx, farL.sy, nearL.sx, nearL.sy, 2, [0.56, 0.63, 0.76]);
-          line(lines, farR.sx, farR.sy, nearR.sx, nearR.sy, 2, [0.56, 0.63, 0.76]);
-          line(lines, (farL.sx + farR.sx) * 0.5, (farL.sy + farR.sy) * 0.5, (nearL.sx + nearR.sx) * 0.5, (nearL.sy + nearR.sy) * 0.5, 2, [0.56, 0.63, 0.76]);
-        }
-        drawLitGround(tris, lines);
-
-        const objs = [];
-        for (const t of state.targets) objs.push({ type: "target", z: t.z, ref: t });
-        for (const b of state.balls) objs.push({ type: "ball", z: b.z, ref: b });
-        objs.sort((a, b) => b.z - a.z);
-
-        for (const o of objs) {
-          if (o.type === "target") {
-            const t = o.ref;
-            drawTargetShadows(tris, t);
-            if (t.dead) {
-              const hp01 = t.maxHp > 0 ? t.hp / t.maxHp : 0;
-              const col = t.hitTimer > 0 ? [0.95, 0.45, 0.34] : [0.72, 0.38 + hp01 * 0.12, 0.34 + hp01 * 0.1];
-              drawLitDisk(tris, t, col);
-            }
+        for (const t of state.targets) {
+          if (!t.dead) {
+            addTargetGeometry(meshVerts, t);
           } else {
-            const b = o.ref;
-            const sh = worldToScreen(b.x, 0.02, b.z);
-            if (sh.ok) {
-              const shadowScale = clamp(1.15 + b.y * 0.08, 1.05, 1.8);
-              const shadowR = b.r * sh.scale * 180 * shadowScale;
-              circle(tris, sh.sx, sh.sy, shadowR, [0.12, 0.12, 0.12, 0.26], 18);
-            }
-            drawLitSphereWard(tris, b, [0.18, 0.22, 0.3]);
+            addTargetGeometry(meshVerts, t);
           }
         }
 
-        // 定向光方向小指示
-        const lightTip = worldToScreen(6.8, 7.3, 13);
-        if (lightTip.ok) line(lines, lightTip.sx - 26, lightTip.sy - 20, lightTip.sx, lightTip.sy, 3, [1.0, 0.95, 0.86, 0.72]);
+        addGun(meshVerts);
 
-        gl.clearColor(0.10, 0.14, 0.2, 1.0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.clearColor(0.88, 0.92, 1.0, 1.0);
+        gl.clearDepth(1);
+        gl.enable(gl.DEPTH_TEST);
+        gl.depthFunc(gl.LEQUAL);
+        gl.disable(gl.CULL_FACE);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-        const triData = new Float32Array(tris);
-        gl.bufferData(gl.ARRAY_BUFFER, triData, gl.DYNAMIC_DRAW);
-        gl.drawArrays(gl.TRIANGLES, 0, triData.length / 6);
+        gl.useProgram(mesh.prog);
+        gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vbo);
+        gl.enableVertexAttribArray(mesh.aPos);
+        gl.enableVertexAttribArray(mesh.aNrm);
+        gl.enableVertexAttribArray(mesh.aCol);
+        gl.vertexAttribPointer(mesh.aPos, 3, gl.FLOAT, false, 40, 0);
+        gl.vertexAttribPointer(mesh.aNrm, 3, gl.FLOAT, false, 40, 12);
+        gl.vertexAttribPointer(mesh.aCol, 4, gl.FLOAT, false, 40, 24);
 
-        const lineData = new Float32Array(lines);
-        gl.bufferData(gl.ARRAY_BUFFER, lineData, gl.DYNAMIC_DRAW);
-        gl.drawArrays(gl.TRIANGLES, 0, lineData.length / 6);
-      }
+        gl.uniformMatrix4fv(mesh.uViewProj, false, state.viewProj);
+        gl.uniform3f(mesh.uCamPos, cam.pos.x, cam.pos.y, cam.pos.z);
+        gl.uniform3f(mesh.uLightDir, directionalLight.dir.x, directionalLight.dir.y, directionalLight.dir.z);
+        gl.uniform3f(mesh.uLightColor, directionalLight.color[0], directionalLight.color[1], directionalLight.color[2]);
+        gl.uniform1f(mesh.uLightIntensity, directionalLight.intensity);
+        gl.uniform3f(mesh.uAmbColor, ambientLight.color[0], ambientLight.color[1], ambientLight.color[2]);
+        gl.uniform1f(mesh.uAmbIntensity, ambientLight.intensity);
+        gl.uniform1f(mesh.uShininess, 26);
+        gl.uniform1f(mesh.uSpecStrength, 0.22);
 
-      function renderGunOverlay() {
-        const tris = [];
-        const lines = [];
-        drawGunModel(tris);
-        drawAimParabolaDashed(lines);
+        const meshData = new Float32Array(meshVerts);
+        gl.bufferData(gl.ARRAY_BUFFER, meshData, gl.DYNAMIC_DRAW);
+        gl.disable(gl.BLEND);
+        gl.depthMask(true);
+        gl.drawArrays(gl.TRIANGLES, 0, meshData.length / 10);
 
-        const triData = new Float32Array(tris);
-        gl.bufferData(gl.ARRAY_BUFFER, triData, gl.DYNAMIC_DRAW);
-        gl.drawArrays(gl.TRIANGLES, 0, triData.length / 6);
+        const texTargets = state.targets.filter((t) => t.portrait && t.portrait.loaded);
+        gl.useProgram(tex.prog);
+        gl.bindBuffer(gl.ARRAY_BUFFER, tex.vbo);
+        gl.enableVertexAttribArray(tex.aPos);
+        gl.enableVertexAttribArray(tex.aNrm);
+        gl.enableVertexAttribArray(tex.aCol);
+        gl.enableVertexAttribArray(tex.aUv);
+        gl.vertexAttribPointer(tex.aPos, 3, gl.FLOAT, false, 48, 0);
+        gl.vertexAttribPointer(tex.aNrm, 3, gl.FLOAT, false, 48, 12);
+        gl.vertexAttribPointer(tex.aCol, 4, gl.FLOAT, false, 48, 24);
+        gl.vertexAttribPointer(tex.aUv, 2, gl.FLOAT, false, 48, 40);
 
-        const lineData = new Float32Array(lines);
-        gl.bufferData(gl.ARRAY_BUFFER, lineData, gl.DYNAMIC_DRAW);
-        gl.drawArrays(gl.TRIANGLES, 0, lineData.length / 6);
+        gl.uniformMatrix4fv(tex.uViewProj, false, state.viewProj);
+        gl.uniform3f(tex.uCamPos, cam.pos.x, cam.pos.y, cam.pos.z);
+        gl.uniform3f(tex.uLightDir, directionalLight.dir.x, directionalLight.dir.y, directionalLight.dir.z);
+        gl.uniform3f(tex.uLightColor, directionalLight.color[0], directionalLight.color[1], directionalLight.color[2]);
+        gl.uniform1f(tex.uLightIntensity, directionalLight.intensity);
+        gl.uniform3f(tex.uAmbColor, ambientLight.color[0], ambientLight.color[1], ambientLight.color[2]);
+        gl.uniform1f(tex.uAmbIntensity, ambientLight.intensity);
+        gl.uniform1i(tex.uTex, 0);
+
+        for (const t of texTargets) {
+          const seg = 36;
+          const thickness = Math.max(0.26, t.r * 0.42);
+          const zFront = t.z - thickness * 0.5 - 0.001;
+          const n = { x: 0, y: 0, z: -1 };
+          const verts = [];
+          for (let i = 0; i < seg; i++) {
+            const a0 = (i / seg) * Math.PI * 2;
+            const a1 = ((i + 1) / seg) * Math.PI * 2;
+            const x0 = Math.cos(a0);
+            const y0 = Math.sin(a0);
+            const x1 = Math.cos(a1);
+            const y1 = Math.sin(a1);
+            const c = { x: t.x, y: t.y, z: zFront };
+            const p0 = { x: t.x + x0 * t.r, y: t.y + y0 * t.r, z: zFront };
+            const p1 = { x: t.x + x1 * t.r, y: t.y + y1 * t.r, z: zFront };
+            pushTexTri(verts, c, n, [1, 1, 1, 1], [0.5, 0.5], p0, n, [1, 1, 1, 1], [0.5 + x0 * 0.5, 0.5 + y0 * 0.5], p1, n, [1, 1, 1, 1], [0.5 + x1 * 0.5, 0.5 + y1 * 0.5]);
+          }
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, t.portrait.tex);
+          const hp01 = t.maxHp > 0 ? t.hp / t.maxHp : 0;
+          gl.uniform1f(tex.uRedTint, clamp((1 - hp01) * 0.35, 0, 0.35));
+          const data = new Float32Array(verts);
+          gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+          gl.drawArrays(gl.TRIANGLES, 0, data.length / 12);
+        }
+
+        gl.useProgram(mesh.prog);
+        gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vbo);
+        gl.enableVertexAttribArray(mesh.aPos);
+        gl.enableVertexAttribArray(mesh.aNrm);
+        gl.enableVertexAttribArray(mesh.aCol);
+        gl.vertexAttribPointer(mesh.aPos, 3, gl.FLOAT, false, 40, 0);
+        gl.vertexAttribPointer(mesh.aNrm, 3, gl.FLOAT, false, 40, 12);
+        gl.vertexAttribPointer(mesh.aCol, 4, gl.FLOAT, false, 40, 24);
+
+        if (shadowVerts.length) {
+          gl.enable(gl.BLEND);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+          gl.depthMask(false);
+          const shadowData = new Float32Array(shadowVerts);
+          gl.bufferData(gl.ARRAY_BUFFER, shadowData, gl.DYNAMIC_DRAW);
+          gl.uniform1f(mesh.uShininess, 8);
+          gl.uniform1f(mesh.uSpecStrength, 0.03);
+          gl.drawArrays(gl.TRIANGLES, 0, shadowData.length / 10);
+          gl.depthMask(true);
+          gl.disable(gl.BLEND);
+          gl.uniform1f(mesh.uShininess, 26);
+          gl.uniform1f(mesh.uSpecStrength, 0.22);
+        }
+
+        const aim = buildAimSegments();
+        if (aim.length) {
+          const lineVerts = [];
+          for (let i = 0; i < aim.length; i += 2) {
+            const s = aim[i];
+            addLine2D(lineVerts, s.x1, s.y1, s.x2, s.y2, 4, [1, 0.18, 0.18, 0.45]);
+          }
+          gl.useProgram(line.prog);
+          gl.bindBuffer(gl.ARRAY_BUFFER, line.vbo);
+          gl.enableVertexAttribArray(line.aPos);
+          gl.enableVertexAttribArray(line.aCol);
+          gl.vertexAttribPointer(line.aPos, 2, gl.FLOAT, false, 24, 0);
+          gl.vertexAttribPointer(line.aCol, 4, gl.FLOAT, false, 24, 8);
+          gl.disable(gl.DEPTH_TEST);
+          gl.enable(gl.BLEND);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+          const data = new Float32Array(lineVerts);
+          gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+          gl.drawArrays(gl.TRIANGLES, 0, data.length / 6);
+          gl.disable(gl.BLEND);
+          gl.enable(gl.DEPTH_TEST);
+        }
       }
 
       function renderHud() {
@@ -1135,66 +1225,12 @@
         hud.textContent = `力度已增强\n圆盘血量 ${hpText}${state.gameOver ? `\n${state.gameOverText}` : ""}`;
       }
 
-      function renderPortraitTextures() {
-        const quads = [];
-        for (const target of state.targets) {
-          if (!target.portrait || !target.portrait.loaded) continue;
-          const c = worldToScreen(target.x, target.y, target.z);
-          if (!c.ok) continue;
-          const d = target.r * c.scale * 180 * 1.75;
-          const x0 = c.sx - d * 0.5;
-          const y0 = c.sy - d * 0.5;
-          const x1 = c.sx + d * 0.5;
-          const y1 = c.sy + d * 0.5;
-          const hp01 = target.maxHp > 0 ? target.hp / target.maxHp : 0;
-          quads.push({
-            z: target.z,
-            tex: target.portrait.tex,
-            tint: clamp((1 - hp01) * 0.38, 0, 0.38),
-            verts: [
-              toClipX(x0), toClipY(y1), 0, 0,
-              toClipX(x1), toClipY(y1), 1, 0,
-              toClipX(x1), toClipY(y0), 1, 1,
-              toClipX(x0), toClipY(y1), 0, 0,
-              toClipX(x1), toClipY(y0), 1, 1,
-              toClipX(x0), toClipY(y0), 0, 1,
-            ],
-          });
-        }
-        quads.sort((a, b) => b.z - a.z);
-
-        gl.useProgram(texProg);
-        gl.bindBuffer(gl.ARRAY_BUFFER, texVbo);
-        gl.enableVertexAttribArray(texAPos);
-        gl.enableVertexAttribArray(texAUv);
-        gl.vertexAttribPointer(texAPos, 2, gl.FLOAT, false, 16, 0);
-        gl.vertexAttribPointer(texAUv, 2, gl.FLOAT, false, 16, 8);
-        gl.uniform1i(texUTex, 0);
-
-        for (const q of quads) {
-          gl.activeTexture(gl.TEXTURE0);
-          gl.bindTexture(gl.TEXTURE_2D, q.tex);
-          gl.uniform4f(texUTint, 1, 1, 1, q.tint);
-          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(q.verts), gl.DYNAMIC_DRAW);
-          gl.drawArrays(gl.TRIANGLES, 0, 6);
-        }
-
-        gl.useProgram(prog);
-        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-        gl.enableVertexAttribArray(aPos);
-        gl.enableVertexAttribArray(aCol);
-        gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 24, 0);
-        gl.vertexAttribPointer(aCol, 4, gl.FLOAT, false, 24, 8);
-      }
-
       function loop(now) {
         const dt = Math.min(0.033, (now - state.lastT) / 1000);
         state.lastT = now;
         update(dt, now / 1000);
-        render();
+        renderScene();
         renderHud();
-        renderPortraitTextures();
-        renderGunOverlay();
         requestAnimationFrame(loop);
       }
 
