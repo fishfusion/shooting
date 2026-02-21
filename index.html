@@ -80,23 +80,39 @@
       #announce.warning #announceCard p {
         font: 700 22px/1.2 "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
       }
-      #announce.taunt {
+      #taunt {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
         padding-bottom: 11vh;
+        pointer-events: none;
+        z-index: 41;
       }
-      #announce.taunt #announceCard {
+      #taunt.show {
+        display: flex;
+      }
+      #tauntCard {
         background: transparent;
         border: 0;
         box-shadow: none;
         padding: 8px 10px;
+        color: #f2f6ff;
+        text-align: center;
+        max-width: min(88vw, 580px);
       }
-      #announce.taunt #announceCard img {
+      #tauntCard img {
         display: block;
         width: 82px;
         height: 82px;
         margin: 0 auto 8px;
         border: 0;
+        border-radius: 50%;
+        object-fit: cover;
       }
-      #announce.taunt #announceCard p {
+      #tauntCard p {
+        margin: 0;
         font: 700 21px/1.2 "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
         text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
       }
@@ -123,12 +139,21 @@
         <button id="restartBtn" type="button">确定</button>
       </div>
     </div>
+    <div id="taunt">
+      <div id="tauntCard">
+        <img id="tauntImg" alt="taunt" />
+        <p id="tauntText"></p>
+      </div>
+    </div>
     <script>
       const canvas = document.getElementById("game");
       const hud = document.getElementById("hud");
       const announce = document.getElementById("announce");
       const announceImg = document.getElementById("announceImg");
       const announceText = document.getElementById("announceText");
+      const taunt = document.getElementById("taunt");
+      const tauntImg = document.getElementById("tauntImg");
+      const tauntText = document.getElementById("tauntText");
       const restartBtn = document.getElementById("restartBtn");
       const gl = canvas.getContext("webgl", { antialias: true, alpha: false });
       if (!gl) throw new Error("WebGL not supported");
@@ -551,6 +576,7 @@
         nextRatePopupTime: 0,
         announceMode: "gameover",
         warningTimer: 0,
+        tauntTimer: 0,
         cloth: null,
         lastPortraitSet: "",
         lastT: performance.now(),
@@ -647,8 +673,9 @@
 
       async function showAnnouncement(src) {
         clearTimeout(state.warningTimer);
+        clearTimeout(state.tauntTimer);
+        taunt.classList.remove("show");
         announce.classList.remove("warning");
-        announce.classList.remove("taunt");
         announceImg.src = src;
         announce.classList.add("show");
         state.announceMode = "gameover";
@@ -677,14 +704,12 @@
         announceImg.src = fallbackPortrait;
         announceText.textContent = line || RATE_WARNING_FALLBACK;
         restartBtn.style.display = "none";
-        announce.classList.remove("taunt");
         announce.classList.add("warning");
         announce.classList.add("show");
         state.warningTimer = setTimeout(() => {
           if (state.announceMode === "warning") {
             announce.classList.remove("show");
             announce.classList.remove("warning");
-            announce.classList.remove("taunt");
             restartBtn.style.display = "";
             state.announceMode = "gameover";
           }
@@ -692,23 +717,13 @@
       }
       function showMissTauntPopup(line) {
         if (state.gameOver) return;
-        clearTimeout(state.warningTimer);
-        state.announceMode = "taunt";
+        clearTimeout(state.tauntTimer);
         const talker = portraits[Math.floor(Math.random() * portraits.length)] || portraits[0];
-        announceImg.src = talker.src;
-        announceText.textContent = line || MISS_TAUNT_FALLBACK;
-        restartBtn.style.display = "none";
-        announce.classList.remove("warning");
-        announce.classList.add("taunt");
-        announce.classList.add("show");
-        state.warningTimer = setTimeout(() => {
-          if (state.announceMode === "taunt") {
-            announce.classList.remove("show");
-            announce.classList.remove("warning");
-            announce.classList.remove("taunt");
-            restartBtn.style.display = "";
-            state.announceMode = "gameover";
-          }
+        tauntImg.src = talker.src;
+        tauntText.textContent = line || MISS_TAUNT_FALLBACK;
+        taunt.classList.add("show");
+        state.tauntTimer = setTimeout(() => {
+          taunt.classList.remove("show");
         }, 1300);
       }
 
@@ -798,8 +813,9 @@
         state.announceName = "";
         announce.classList.remove("show");
         announce.classList.remove("warning");
-        announce.classList.remove("taunt");
+        taunt.classList.remove("show");
         clearTimeout(state.warningTimer);
+        clearTimeout(state.tauntTimer);
         restartBtn.style.display = "";
         state.announceMode = "gameover";
         state.balls = [];
@@ -2288,10 +2304,9 @@
         createTargets();
       });
       restartBtn.addEventListener("click", () => {
-        if (state.announceMode === "warning" || state.announceMode === "taunt") {
+        if (state.announceMode === "warning") {
           announce.classList.remove("show");
           announce.classList.remove("warning");
-          announce.classList.remove("taunt");
           restartBtn.style.display = "";
           state.announceMode = "gameover";
           return;
