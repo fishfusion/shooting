@@ -281,6 +281,21 @@
         targetDamping: 8,
         targetGravity: -5,
       };
+      const clothSetup = {
+        xMin: -9,
+        xMax: 9,
+        z: 34.6,
+        width: 18,
+        height: 36,
+        topY: 16,
+        cols: 23,
+        rows: 47,
+        substeps: 2,
+        iterations: 5,
+        damping: 0.02,
+        stretchCompliance: 0.00003,
+        shearCompliance: 0.00009,
+      };
 
       const cam = {
         pos: { x: 0, y: 3.8, z: -16 },
@@ -374,6 +389,7 @@
         lastInviteLine: "",
         preparedInviteLine: "",
         invitePrefetching: false,
+        cloth: null,
         lastPortraitSet: "",
         lastT: performance.now(),
       };
@@ -506,6 +522,7 @@
         state.fragments = [];
         state.score = 0;
         state.targets = [];
+        initCloth();
         state.preparedInviteLine = "";
         state.invitePrefetching = false;
 
@@ -557,6 +574,149 @@
           });
         }
         primeInviteLine();
+      }
+
+      function initCloth() {
+        const cols = clothSetup.cols;
+        const rows = clothSetup.rows;
+        const width = clothSetup.width;
+        const height = clothSetup.height;
+        const dx = width / (cols - 1);
+        const dy = height / (rows - 1);
+        const nodes = new Array(cols * rows);
+        const constraints = [];
+
+        const addConstraint = (i0, i1, compliance) => {
+          const a = nodes[i0];
+          const b = nodes[i1];
+          const rx = a.x - b.x;
+          const ry = a.y - b.y;
+          const rz = a.z - b.z;
+          constraints.push({
+            i0,
+            i1,
+            rest: Math.hypot(rx, ry, rz),
+            compliance,
+            lambda: 0,
+          });
+        };
+
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            const px = clothSetup.xMin + x * dx;
+            const py = clothSetup.topY - y * dy;
+            const pz = clothSetup.z;
+            const pin = y === 0;
+            nodes[x + y * cols] = {
+              x: px,
+              y: py,
+              z: pz,
+              px,
+              py,
+              pz,
+              invMass: pin ? 0 : 1,
+            };
+          }
+        }
+
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            const i = x + y * cols;
+            if (x < cols - 1) addConstraint(i, i + 1, clothSetup.stretchCompliance);
+            if (y < rows - 1) addConstraint(i, i + cols, clothSetup.stretchCompliance);
+            if (x < cols - 1 && y < rows - 1) {
+              addConstraint(i, i + cols + 1, clothSetup.shearCompliance);
+              addConstraint(i + 1, i + cols, clothSetup.shearCompliance);
+            }
+          }
+        }
+
+        state.cloth = { cols, rows, nodes, constraints };
+      }
+
+      function solveClothConstraints(stepDt) {
+        const cloth = state.cloth;
+        if (!cloth) return;
+        const alphaScale = 1 / (stepDt * stepDt);
+        for (const c of cloth.constraints) {
+          const a = cloth.nodes[c.i0];
+          const b = cloth.nodes[c.i1];
+          const w0 = a.invMass;
+          const w1 = b.invMass;
+          if (w0 + w1 <= 0) continue;
+          const dx = a.x - b.x;
+          const dy = a.y - b.y;
+          const dz = a.z - b.z;
+          const len = Math.hypot(dx, dy, dz);
+          if (len < 1e-6) continue;
+          const nx = dx / len;
+          const ny = dy / len;
+          const nz = dz / len;
+          const C = len - c.rest;
+          const alpha = c.compliance * alphaScale;
+          const dl = (-C - alpha * c.lambda) / (w0 + w1 + alpha);
+          c.lambda += dl;
+          a.x += nx * dl * w0;
+          a.y += ny * dl * w0;
+          a.z += nz * dl * w0;
+          b.x -= nx * dl * w1;
+          b.y -= ny * dl * w1;
+          b.z -= nz * dl * w1;
+        }
+      }
+
+      function solveClothBallCollision() {
+        const cloth = state.cloth;
+        if (!cloth) return;
+        for (const n of cloth.nodes) {
+          if (n.invMass <= 0) continue;
+          for (const ball of state.balls) {
+            if (!ball.alive || ball.stopped) continue;
+            const rr = ball.r + 0.05;
+            const dx = n.x - ball.x;
+            const dy = n.y - ball.y;
+            const dz = n.z - ball.z;
+            const d = Math.hypot(dx, dy, dz);
+            if (d >= rr || d < 1e-6) continue;
+            const nx = dx / d;
+            const ny = dy / d;
+            const nz = dz / d;
+            const push = rr - d;
+            n.x += nx * push;
+            n.y += ny * push;
+            n.z += nz * push;
+            ball.vx -= nx * 1.1;
+            ball.vy -= ny * 1.1;
+            ball.vz -= nz * 1.1;
+          }
+        }
+      }
+
+      function updateCloth(dt) {
+        const cloth = state.cloth;
+        if (!cloth) return;
+        const stepDt = dt / clothSetup.substeps;
+        const damp = 1 - clothSetup.damping;
+        for (let s = 0; s < clothSetup.substeps; s++) {
+          for (const n of cloth.nodes) {
+            if (n.invMass <= 0) continue;
+            const vx = (n.x - n.px) * damp;
+            const vy = (n.y - n.py) * damp;
+            const vz = (n.z - n.pz) * damp;
+            n.px = n.x;
+            n.py = n.y;
+            n.pz = n.z;
+            n.x += vx;
+            n.y += vy + world.gravity * stepDt * stepDt;
+            n.z += vz;
+          }
+
+          for (const c of cloth.constraints) c.lambda = 0;
+          for (let i = 0; i < clothSetup.iterations; i++) {
+            solveClothConstraints(stepDt);
+            solveClothBallCollision();
+          }
+        }
       }
 
       function pointerPos(e) {
@@ -646,6 +806,8 @@
       }
 
       function update(dt, t) {
+        updateCloth(dt);
+
         for (const target of state.targets) {
           target.r = targetRadiusFromHp(target);
           if (!target.dead) {
@@ -1111,6 +1273,34 @@
           addGroundLine(meshArr, { x, y: 0.015, z: 2 }, { x, y: 0.015, z: 34 }, 0.025, lineCol);
         }
       }
+      function addClothMesh(meshArr) {
+        const cloth = state.cloth;
+        if (!cloth) return;
+        const base = [0.05, 0.11, 0.34, 1.0];
+        for (let y = 0; y < cloth.rows - 1; y++) {
+          for (let x = 0; x < cloth.cols - 1; x++) {
+            const i00 = x + y * cloth.cols;
+            const i10 = i00 + 1;
+            const i01 = i00 + cloth.cols;
+            const i11 = i01 + 1;
+            const p00 = cloth.nodes[i00];
+            const p10 = cloth.nodes[i10];
+            const p01 = cloth.nodes[i01];
+            const p11 = cloth.nodes[i11];
+
+            const e1 = sub3(p10, p00);
+            const e2 = sub3(p01, p00);
+            let n = normalize3(cross3(e1, e2).x, cross3(e1, e2).y, cross3(e1, e2).z);
+            if (!Number.isFinite(n.x)) n = { x: 0, y: 0, z: -1 };
+
+            const stripe = 0.92 + 0.08 * Math.sin((x / cloth.cols) * Math.PI * 6);
+            const col = [base[0] * stripe, base[1] * stripe, base[2] * stripe, 1];
+
+            pushMeshTri(meshArr, p00, n, col, p01, n, col, p11, n, col);
+            pushMeshTri(meshArr, p00, n, col, p11, n, col, p10, n, col);
+          }
+        }
+      }
       function addGroundLine(arr, a, b, w, col) {
         const d = sub3(b, a);
         const len = Math.hypot(d.x, d.y, d.z) || 1;
@@ -1283,9 +1473,11 @@
         updateViewProj();
 
         const meshVerts = [];
+        const clothVerts = [];
         const shadowVerts = [];
 
         addGround(meshVerts);
+        addClothMesh(clothVerts);
 
         for (const t of state.targets) {
           addTargetShadow(shadowVerts, t);
@@ -1340,6 +1532,16 @@
         gl.disable(gl.BLEND);
         gl.depthMask(true);
         gl.drawArrays(gl.TRIANGLES, 0, meshData.length / 10);
+
+        if (clothVerts.length) {
+          const clothData = new Float32Array(clothVerts);
+          gl.bufferData(gl.ARRAY_BUFFER, clothData, gl.DYNAMIC_DRAW);
+          gl.uniform1f(mesh.uShininess, 9);
+          gl.uniform1f(mesh.uSpecStrength, 0.48);
+          gl.drawArrays(gl.TRIANGLES, 0, clothData.length / 10);
+          gl.uniform1f(mesh.uShininess, 26);
+          gl.uniform1f(mesh.uSpecStrength, 0.22);
+        }
 
         const texTargets = state.targets.filter((t) => t.portrait && t.portrait.loaded);
         gl.useProgram(tex.prog);
@@ -1442,8 +1644,7 @@
       }
 
       function renderHud() {
-        const hpText = state.targets.map((t, i) => `${i + 1}:${Math.ceil(t.hp)}/${t.maxHp}`).join("  ");
-        hud.textContent = `力度已增强\n圆盘血量 ${hpText}${state.gameOver ? `\n${state.gameOverText}` : ""}`;
+        hud.textContent = state.gameOver ? state.gameOverText : "";
       }
 
       function loop(now) {

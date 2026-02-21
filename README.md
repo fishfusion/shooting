@@ -53,3 +53,12 @@
   - 主要通过 `PhysicsMaterial2D` 的 `Bounciness/Friction` 调节
 - 目标运动：
   - `TargetSpawner` 里的 `_speedFactors`、`_scales` 可直接改出不同难度
+
+## 新增：远端布料（XPBD + Ward）
+1. 场景里创建空物体 `BackdropCloth`，挂上 `XPBDCloth`（会自动生成网格）。
+2. 在 `GameBootstrap` 里绑定：
+   - `Ground Collider`：地板的 `Collider2D`
+   - `Backdrop Cloth`：`BackdropCloth`
+3. 运行后会自动把布宽设为地板宽，布高设为宽的 2 倍，并挂在远端上沿位置。
+4. `XPBDCloth` 默认启用与 `CircleCollider2D` 碰撞（用于球），未启用自碰撞。
+5. 通过 `BackdropCloth` 的 `MeshRenderer` 使用 `Custom/WardCloth`，默认深蓝色布面和 Ward 高光。
