@@ -602,13 +602,14 @@
             lambda: 0,
           });
         };
+        const rivetCols = new Set([0, Math.round((cols - 1) / 3), Math.round(((cols - 1) * 2) / 3), cols - 1]);
 
         for (let y = 0; y < rows; y++) {
           for (let x = 0; x < cols; x++) {
             const px = clothSetup.xMin + x * dx;
             const py = clothSetup.topY - y * dy;
             const pz = clothSetup.z;
-            const pin = y === 0;
+            const pin = y === 0 && rivetCols.has(x);
             nodes[x + y * cols] = {
               x: px,
               y: py,
@@ -633,7 +634,16 @@
               addConstraint(i + 1, i + cols, clothSetup.shearCompliance);
             }
             if (y > 0) {
-              const top = x;
+              let nearestRivet = 0;
+              let bestDist = Infinity;
+              for (const rx of rivetCols) {
+                const d = Math.abs(rx - x);
+                if (d < bestDist) {
+                  bestDist = d;
+                  nearestRivet = rx;
+                }
+              }
+              const top = nearestRivet;
               addConstraint(i, top, clothSetup.tetherCompliance);
             }
           }
