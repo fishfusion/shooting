@@ -366,6 +366,7 @@
         announceSrc: "",
         announceName: "",
         lastInviteLine: "",
+        lastPortraitSet: "",
         lastT: performance.now(),
       };
 
@@ -467,7 +468,17 @@
         state.score = 0;
         state.targets = [];
 
-        const selectedPortraits = shuffled(portraits).slice(0, 6);
+        let selectedPortraits = shuffled(portraits).slice(0, 6);
+        let sig = selectedPortraits.map((p) => p.file).join("|");
+        // 避免“点击确定后看起来没换图”：新一局与上一局至少顺序不同。
+        if (state.lastPortraitSet && sig === state.lastPortraitSet) {
+          for (let i = 0; i < 6; i++) {
+            selectedPortraits = shuffled(portraits).slice(0, 6);
+            sig = selectedPortraits.map((p) => p.file).join("|");
+            if (sig !== state.lastPortraitSet) break;
+          }
+        }
+        state.lastPortraitSet = sig;
         for (let i = 0; i < 6; i++) {
           const z = zs[i];
           const near01 = (farZ - z) / (farZ - nearZ);
