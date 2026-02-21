@@ -382,6 +382,9 @@
         }
         return a;
       }
+      function hasTimePhrase(text) {
+        return /(下周[一二三四五六日天末]?|周[一二三四五六日天末]|周末|今晚|明晚|明天|后天|本周|这个周末|下个周末)/.test(text);
+      }
 
       async function generatePhilosophicalInviteLine() {
         const apiUrl = localStorage.getItem("OPENAI_PROXY_URL") || DEFAULT_INVITE_API;
@@ -389,7 +392,7 @@
         for (let attempt = 0; attempt < 5; attempt++) {
           const seed = PHILOSOPHICAL_SEEDS[Math.floor(Math.random() * PHILOSOPHICAL_SEEDS.length)];
           const nonce = `${Date.now().toString(36)}-${attempt}`;
-          const prompt = `写一句中文邀请语，必须保留核心意思：叫上Leo来我家吃烧烤。语气自然，有一点哲理，不要鸡汤，不要解释，只输出一句话。可参考意象：${seed}。避免与这句重复：${state.lastInviteLine || "无"}。随机标记:${nonce}`;
+          const prompt = `写一句中文邀请语，必须保留核心意思：你下周末叫上Leo来我家吃烧烤。句子里必须出现一个明确时间点（例如：下周六/周日/周末/明晚）。语气自然，有一点哲理，不要鸡汤，不要解释，只输出一句话。可参考意象：${seed}。避免与这句重复：${state.lastInviteLine || "无"}。随机标记:${nonce}`;
           try {
             const res = await fetch(apiUrl, {
               method: "POST",
@@ -409,6 +412,7 @@
             if (/^\s*Leo[，,:：\s]/i.test(clean)) continue;
             if (!/叫上\s*Leo/i.test(clean)) clean = `下周末你叫上Leo，${clean}`;
             if (!/你/.test(clean)) clean = `你${clean}`;
+            if (!hasTimePhrase(clean)) clean = `下周六${clean}`;
             if (!/Leo/i.test(clean)) clean = `${clean} 叫上Leo。`;
             if (!/烧烤/.test(clean)) clean = `${clean} 来我家吃烧烤吧。`;
             if (clean === state.lastInviteLine) continue;
