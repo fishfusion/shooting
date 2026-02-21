@@ -11,7 +11,7 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background: #101722;
+        background: #000000;
       }
       canvas {
         display: block;
@@ -2124,7 +2124,7 @@
         const xMax = 9;
         const zNear = -3;
         const zFar = 35;
-        const base = [0.68, 0.76, 0.9, 1.0];
+        const base = [0.46, 0.31, 0.19, 1.0];
 
         pushMeshQuad(
           meshArr,
@@ -2142,7 +2142,7 @@
           base
         );
 
-        const lineCol = [0.75, 0.84, 0.96, 0.92];
+        const lineCol = [0.62, 0.45, 0.29, 0.9];
         for (let z = 2; z <= 34; z += 2) {
           addGroundLine(meshArr, { x: -8, y: 0.015, z }, { x: 8, y: 0.015, z }, 0.025, lineCol);
         }
@@ -2403,7 +2403,7 @@
 
         for (const b of state.balls) {
           if (!b.alive) continue;
-          addSphereMesh(meshVerts, { x: b.x, y: b.y, z: b.z }, b.r, [0.18, 0.22, 0.3, 1], PERF.ballSphereLat, PERF.ballSphereLon);
+          addSphereMesh(meshVerts, { x: b.x, y: b.y, z: b.z }, b.r, [0.82, 0.84, 0.88, 1], PERF.ballSphereLat, PERF.ballSphereLon);
         }
         for (const f of state.fragments) {
           addSphereMesh(meshVerts, { x: f.x, y: f.y, z: f.z }, f.r, [0.2, 0.22, 0.28, 1], PERF.fragmentSphereLat, PERF.fragmentSphereLon);
@@ -2419,7 +2419,7 @@
 
         addGun(meshVerts);
 
-        gl.clearColor(0.88, 0.92, 1.0, 1.0);
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
         gl.clearDepth(1);
         gl.enable(gl.DEPTH_TEST);
         gl.depthFunc(gl.LEQUAL);
