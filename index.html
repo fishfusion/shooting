@@ -1391,6 +1391,12 @@
       function spawnBall(x, y, z, vx, vy, vz) {
         state.balls.push({ x, y, z, vx, vy, vz, r: 0.28, mass: 3.2, alive: true, stopped: false, hitCd: 0, hitTarget: false, missCounted: false });
       }
+      function stopBall(ball) {
+        ball.stopped = true;
+        ball.vx = 0;
+        ball.vy = 0;
+        ball.vz = 0;
+      }
 
       function spawnBallFragments(ball) {
         const count = 14;
@@ -1554,15 +1560,20 @@
               ball.vy = Math.abs(ball.vy) * world.bounce;
               ball.vx *= world.groundFriction;
               ball.vz *= world.groundFriction;
-              if (Math.abs(ball.vy) < 1.1 && Math.hypot(ball.vx, ball.vz) < 1.0) {
-                ball.stopped = true;
-                ball.vx = 0;
-                ball.vy = 0;
-                ball.vz = 0;
+              if (Math.abs(ball.vy) < 1.7 && Math.hypot(ball.vx, ball.vz) < 1.4) {
+                stopBall(ball);
                 if (!ball.hitTarget && !ball.missCounted) {
                   ball.missCounted = true;
                   registerMissedShot();
                 }
+              }
+            }
+
+            if (!ball.stopped && ball.y <= ball.r + 0.03 && Math.hypot(ball.vx, ball.vy, ball.vz) < 1.9) {
+              stopBall(ball);
+              if (!ball.hitTarget && !ball.missCounted) {
+                ball.missCounted = true;
+                registerMissedShot();
               }
             }
 
