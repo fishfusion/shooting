@@ -477,7 +477,11 @@
 
       async function generatePhilosophicalInviteLine() {
         const customApiUrl = String(localStorage.getItem("OPENAI_PROXY_URL") || "").trim();
-        const apiCandidates = customApiUrl && customApiUrl !== DEFAULT_INVITE_API ? [customApiUrl, DEFAULT_INVITE_API] : [DEFAULT_INVITE_API];
+        const useCustomOnGithub = customApiUrl && !customApiUrl.startsWith("/");
+        const apiCandidates =
+          customApiUrl && customApiUrl !== DEFAULT_INVITE_API && (!location.hostname.endsWith("github.io") || useCustomOnGithub)
+            ? [customApiUrl, DEFAULT_INVITE_API]
+            : [DEFAULT_INVITE_API];
         let lastErr = "";
         for (let attempt = 0; attempt < 5; attempt++) {
           const seed = PHILOSOPHICAL_SEEDS[Math.floor(Math.random() * PHILOSOPHICAL_SEEDS.length)];
@@ -518,7 +522,11 @@
 
       async function generateRateWarningLine() {
         const customApiUrl = String(localStorage.getItem("OPENAI_PROXY_URL") || "").trim();
-        const apiCandidates = customApiUrl && customApiUrl !== DEFAULT_INVITE_API ? [customApiUrl, DEFAULT_INVITE_API] : [DEFAULT_INVITE_API];
+        const useCustomOnGithub = customApiUrl && !customApiUrl.startsWith("/");
+        const apiCandidates =
+          customApiUrl && customApiUrl !== DEFAULT_INVITE_API && (!location.hostname.endsWith("github.io") || useCustomOnGithub)
+            ? [customApiUrl, DEFAULT_INVITE_API]
+            : [DEFAULT_INVITE_API];
         let lastErr = "";
         for (let attempt = 0; attempt < 4; attempt++) {
           const nonce = `${Date.now().toString(36)}-w-${attempt}`;
@@ -627,7 +635,6 @@
       function startRateWarningRefresh() {
         if (state.rateWarningRefreshTimer) clearInterval(state.rateWarningRefreshTimer);
         state.rateWarningRefreshTimer = setInterval(() => {
-          if (!state.rateWarningLastFetchOk && state.rateWarningPool.length === 0) return;
           if (state.rateWarningPool.length < RATE_WARNING_POOL_SIZE + 1) primeRateWarningLine();
         }, RATE_WARNING_REFRESH_MS);
       }
@@ -642,6 +649,15 @@
             state.preparedRateWarningLine = "";
             if (line !== RATE_WARNING_FALLBACK) state.lastRateWarningLine = line;
             showRateWarningPopup(line);
+            if (line === RATE_WARNING_FALLBACK) {
+              generateRateWarningLine().then((result) => {
+                if (!result || !result.fromOpenAI || !result.text) return;
+                if (state.announceMode === "warning") announceText.textContent = result.text;
+                state.lastRateWarningLine = result.text;
+                const prev = state.rateWarningPool[state.rateWarningPool.length - 1];
+                if (result.text !== prev) state.rateWarningPool.push(result.text);
+              });
+            }
             primeRateWarningLine();
           }
           return true;
