@@ -982,7 +982,7 @@
         for (let i = 0; i < targetCount; i++) {
           const z = zs[i];
           const near01 = (farZ - z) / (farZ - nearZ);
-          const maxHp = Math.round(70 + near01 * 90);
+          const maxHp = Math.round((70 + near01 * 90) * 1.5);
           state.targets.push({
             baseX: xs[i],
             baseY: ys[i],
