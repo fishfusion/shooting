@@ -299,9 +299,9 @@
         tetherCompliance: 0.00001,
         groundY: 0.03,
         initialReleaseDepth: 14,
-        collisionRestitution: 0.12,
-        collisionTangentDamping: 0.72,
-        collisionSpeedDamping: 0.84,
+        collisionRestitution: 0.0,
+        collisionTangentDamping: 0.52,
+        collisionSpeedDamping: 0.68,
         timeStepScale: 1.8,
       };
 
@@ -699,10 +699,15 @@
         const restitution = clothSetup.collisionRestitution;
         const tangentDamping = clothSetup.collisionTangentDamping;
         const speedDamping = clothSetup.collisionSpeedDamping;
-        for (const n of cloth.nodes) {
-          if (n.invMass <= 0) continue;
-          for (const ball of state.balls) {
-            if (!ball.alive || ball.stopped) continue;
+        for (const ball of state.balls) {
+          if (!ball.alive || ball.stopped) continue;
+          let hit = false;
+          let nsumX = 0;
+          let nsumY = 0;
+          let nsumZ = 0;
+          let maxPen = 0;
+          for (const n of cloth.nodes) {
+            if (n.invMass <= 0) continue;
             const rr = ball.r + 0.05;
             const dx = n.x - ball.x;
             const dy = n.y - ball.y;
@@ -713,32 +718,52 @@
             const ny = dy / d;
             const nz = dz / d;
             const push = rr - d;
-            // Let cloth absorb most penetration correction; ball only shifts a bit.
-            n.x += nx * push * 0.85;
-            n.y += ny * push * 0.85;
-            n.z += nz * push * 0.85;
-            ball.x -= nx * push * 0.15;
-            ball.y -= ny * push * 0.15;
-            ball.z -= nz * push * 0.15;
-
-            // Inelastic contact against cloth: weak normal bounce + tangential damping.
-            const vn = ball.vx * nx + ball.vy * ny + ball.vz * nz;
-            if (vn < 0) {
-              const vnx = nx * vn;
-              const vny = ny * vn;
-              const vnz = nz * vn;
-              const vtx = ball.vx - vnx;
-              const vty = ball.vy - vny;
-              const vtz = ball.vz - vnz;
-              ball.vx = vtx * tangentDamping - vnx * restitution;
-              ball.vy = vty * tangentDamping - vny * restitution;
-              ball.vz = vtz * tangentDamping - vnz * restitution;
-            }
-            ball.vx *= speedDamping;
-            ball.vy *= speedDamping;
-            ball.vz *= speedDamping;
+            maxPen = Math.max(maxPen, push);
+            hit = true;
+            nsumX += nx * push;
+            nsumY += ny * push;
+            nsumZ += nz * push;
+            // Push cloth away, keep ball position stable to avoid wall-like recoil.
+            n.x += nx * push * 0.95;
+            n.y += ny * push * 0.95;
+            n.z += nz * push * 0.95;
           }
+          if (!hit) continue;
+
+          const nm = Math.hypot(nsumX, nsumY, nsumZ) || 1;
+          const nx = nsumX / nm;
+          const ny = nsumY / nm;
+          const nz = nsumZ / nm;
+          const vn = ball.vx * nx + ball.vy * ny + ball.vz * nz;
+
+          // Remove incoming normal speed (no bounce), keep a tiny rebound only if configured.
+          if (vn > 0) {
+            const keep = -vn * restitution;
+            const dv = vn - keep;
+            ball.vx -= nx * dv;
+            ball.vy -= ny * dv;
+            ball.vz -= nz * dv;
+          }
+
+          // Cloth friction + bulk energy loss.
+          const vnn = ball.vx * nx + ball.vy * ny + ball.vz * nz;
+          const vnx = nx * vnn;
+          const vny = ny * vnn;
+          const vnz = nz * vnn;
+          const vtx = ball.vx - vnx;
+          const vty = ball.vy - vny;
+          const vtz = ball.vz - vnz;
+          ball.vx = vnx + vtx * tangentDamping;
+          ball.vy = vny + vty * tangentDamping;
+          ball.vz = vnz + vtz * tangentDamping;
+
+          const penDamp = Math.max(0.45, 1 - maxPen * 4.0);
+          ball.vx *= speedDamping * penDamp;
+          ball.vy *= speedDamping * penDamp;
+          ball.vz *= speedDamping * penDamp;
+          ball.hitCd = Math.max(ball.hitCd, 0.03);
         }
+      }
       }
 
       function solveClothGroundCollision() {
