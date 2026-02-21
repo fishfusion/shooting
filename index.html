@@ -301,10 +301,10 @@
         groundY: 0.03,
         initialReleaseDepth: 14,
         collisionRestitution: 0.0,
-        collisionTangentDamping: 0.98,
-        collisionSpeedDamping: 1.0,
+        collisionTangentDamping: 0.9,
+        collisionSpeedDamping: 0.92,
         collisionDetachSpeed: 0.0,
-        collisionMaxOutSpeed: 0.0,
+        collisionMaxOutSpeed: 0.12,
         timeStepScale: 1.8,
       };
 
@@ -766,6 +766,16 @@
           ball.vx = vnx + vtx * tangentDamping;
           ball.vy = vny + vty * tangentDamping;
           ball.vz = vnz + vtz * tangentDamping;
+
+          // Heavily clamp outgoing normal component to avoid wall-like rebound.
+          const outVn = ball.vx * nx + ball.vy * ny + ball.vz * nz;
+          if (outVn < 0) {
+            const keepOut = Math.max(outVn, -clothSetup.collisionMaxOutSpeed);
+            const cut = outVn - keepOut;
+            ball.vx -= nx * cut;
+            ball.vy -= ny * cut;
+            ball.vz -= nz * cut;
+          }
 
           const penDamp = Math.max(0.9, 1 - maxPen * 0.4);
           ball.vx *= speedDamping * penDamp;
