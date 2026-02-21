@@ -298,6 +298,7 @@
         bendCompliance: 0.000012,
         tetherCompliance: 0.00001,
         groundY: 0.03,
+        initialReleaseDepth: 14,
       };
 
       const cam = {
@@ -620,14 +621,10 @@
         for (let y = 0; y < rows; y++) {
           for (let x = 0; x < cols; x++) {
             const px = clothSetup.xMin + x * dx;
-            let py = clothSetup.topY - y * dy;
-            if (y === 0 && !rivetCols.has(x)) {
-              const rx = nearestRivetCol(x);
-              const t = Math.abs(x - rx) / Math.max(1, cols - 1);
-              py -= 0.45 + t * 0.25;
-            }
-            const pz = clothSetup.z;
             const pin = y === 0 && rivetCols.has(x);
+            const release01 = y / Math.max(1, rows - 1);
+            const py = pin ? clothSetup.topY : clothSetup.topY;
+            const pz = pin ? clothSetup.z : clothSetup.z - clothSetup.initialReleaseDepth * release01;
             nodes[x + y * cols] = {
               x: px,
               y: py,
