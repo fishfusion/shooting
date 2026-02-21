@@ -815,6 +815,66 @@
         }
       }
 
+      function resolveBallClothSweep(ball, prev) {
+        const cloth = state.cloth;
+        if (!cloth) return;
+        const sx = prev.x, sy = prev.y, sz = prev.z;
+        const ex = ball.x, ey = ball.y, ez = ball.z;
+        const dx = ex - sx, dy = ey - sy, dz = ez - sz;
+        const segLen2 = dx * dx + dy * dy + dz * dz;
+        if (segLen2 < 1e-8) return;
+
+        const rr = ball.r + 0.08;
+        let hit = false;
+        let bestT = 1;
+        let hitNx = 0, hitNy = 0, hitNz = 0;
+
+        for (const n of cloth.nodes) {
+          const wx = n.x - sx;
+          const wy = n.y - sy;
+          const wz = n.z - sz;
+          const t = clamp((wx * dx + wy * dy + wz * dz) / segLen2, 0, 1);
+          const cx = sx + dx * t;
+          const cy = sy + dy * t;
+          const cz = sz + dz * t;
+          const ox = cx - n.x;
+          const oy = cy - n.y;
+          const oz = cz - n.z;
+          const dist2 = ox * ox + oy * oy + oz * oz;
+          if (dist2 >= rr * rr) continue;
+          const dist = Math.sqrt(Math.max(1e-10, dist2));
+          const nx = ox / dist;
+          const ny = oy / dist;
+          const nz = oz / dist;
+          if (!hit || t < bestT) {
+            hit = true;
+            bestT = t;
+            hitNx = nx;
+            hitNy = ny;
+            hitNz = nz;
+          }
+        }
+
+        if (!hit) return;
+
+        const hx = sx + dx * bestT;
+        const hy = sy + dy * bestT;
+        const hz = sz + dz * bestT;
+        ball.x = hx + hitNx * (rr + 0.01);
+        ball.y = hy + hitNy * (rr + 0.01);
+        ball.z = hz + hitNz * (rr + 0.01);
+
+        const vn = ball.vx * hitNx + ball.vy * hitNy + ball.vz * hitNz;
+        if (vn < 0) {
+          ball.vx -= hitNx * vn;
+          ball.vy -= hitNy * vn;
+          ball.vz -= hitNz * vn;
+        }
+        ball.vx *= 0.94;
+        ball.vy *= 0.94;
+        ball.vz *= 0.94;
+      }
+
       function updateCloth(dt) {
         const cloth = state.cloth;
         if (!cloth) return;
@@ -998,6 +1058,7 @@
         for (const ball of state.balls) {
           if (!ball.alive) continue;
           if (ball.stopped) continue;
+          const prev = { x: ball.x, y: ball.y, z: ball.z };
           ball.hitCd = Math.max(0, ball.hitCd - dt);
           ball.vy += world.gravity * dt;
           ball.vx *= world.drag;
@@ -1028,6 +1089,8 @@
             ball.x = 7 - ball.r;
             ball.vx = -Math.abs(ball.vx) * world.wallBounce;
           }
+
+          resolveBallClothSweep(ball, prev);
 
           for (const target of state.targets) {
             if (target.dead) continue;
