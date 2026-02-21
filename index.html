@@ -23,6 +23,7 @@
         position: fixed;
         left: 12px;
         top: 12px;
+        z-index: 30;
         color: #e8efff;
         font: 500 14px/1.35 "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
@@ -33,6 +34,7 @@
         position: fixed;
         inset: 0;
         pointer-events: none;
+        z-index: 20;
       }
       .portrait-disc {
         position: absolute;
@@ -56,6 +58,7 @@
         align-items: center;
         justify-content: center;
         pointer-events: none;
+        z-index: 40;
       }
       #announce.show {
         display: flex;
@@ -1024,10 +1027,13 @@
             el.style.display = "none";
             continue;
           }
-          const d = target.r * c.scale * 180 * 1.75;
+          const dDesign = target.r * c.scale * 180 * 1.75;
+          const sx = state.view.x + c.sx * state.view.scale;
+          const sy = state.view.y + c.sy * state.view.scale;
+          const d = dDesign * state.view.scale;
           el.style.display = "block";
-          el.style.left = `${c.sx}px`;
-          el.style.top = `${c.sy}px`;
+          el.style.left = `${sx}px`;
+          el.style.top = `${sy}px`;
           el.style.width = `${d}px`;
           el.style.height = `${d}px`;
           el.style.opacity = target.dead ? "0.9" : "1";
