@@ -399,8 +399,8 @@
         "这个周末你叫上Leo来我家吃烧烤，答案有时就藏在一桌人间烟火里。",
       ];
       const FIRE_RATE_LIMIT = {
-        windowSec: 1.0,
-        maxShots: 2,
+        windowSec: 0.5,
+        maxShots: 1,
         popupCooldownSec: 1.6,
       };
       const RATE_WARNING_FALLBACK = "省这点弹药，咱穷。";
@@ -534,14 +534,14 @@
               const text = String(result.text || "").replace(/^["'“”]+|["'“”]+$/g, "").trim();
               if (!text) continue;
               if (text === state.lastRateWarningLine) continue;
-              return text;
+              return { text, fromOpenAI: true };
             } catch (_err) {
               lastErr = `${apiUrl} -> ${String(_err && _err.message ? _err.message : _err)}`;
             }
           }
         }
         if (lastErr) console.warn("rate warning generation failed:", lastErr);
-        return RATE_WARNING_FALLBACK;
+        return { text: RATE_WARNING_FALLBACK, fromOpenAI: false };
       }
 
       async function showAnnouncement(src) {
@@ -602,8 +602,9 @@
         if (state.rateWarningPool.length >= RATE_WARNING_POOL_SIZE) return;
         state.rateWarningPrefetching = true;
         generateRateWarningLine()
-          .then((line) => {
-            if (line) {
+          .then((result) => {
+            if (result && result.text && result.fromOpenAI) {
+              const line = result.text;
               state.preparedRateWarningLine = line;
               const prev = state.rateWarningPool[state.rateWarningPool.length - 1];
               if (line !== prev) state.rateWarningPool.push(line);
@@ -632,7 +633,7 @@
             state.nextRatePopupTime = now + FIRE_RATE_LIMIT.popupCooldownSec;
             const line = state.rateWarningPool.shift() || state.preparedRateWarningLine || RATE_WARNING_FALLBACK;
             state.preparedRateWarningLine = "";
-            state.lastRateWarningLine = line;
+            if (line !== RATE_WARNING_FALLBACK) state.lastRateWarningLine = line;
             showRateWarningPopup(line);
             primeRateWarningLine();
           }
