@@ -941,6 +941,29 @@
         ball.vx *= 0.99;
         ball.vy *= 0.99;
         ball.vz *= 0.99;
+
+        // Transfer impact impulse to nearby cloth nodes so the curtain visibly reacts.
+        const impact = Math.max(0, -(ball.vx * hitNx + ball.vy * hitNy + ball.vz * hitNz));
+        const radius = ball.r * 2.8;
+        const radius2 = radius * radius;
+        const pushBase = clamp(impact * 0.012, 0.02, 0.2);
+        for (const n of cloth.nodes) {
+          if (n.invMass <= 0) continue;
+          const dxn = n.x - hx;
+          const dyn = n.y - hy;
+          const dzn = n.z - hz;
+          const d2 = dxn * dxn + dyn * dyn + dzn * dzn;
+          if (d2 > radius2) continue;
+          const w = 1 - Math.sqrt(d2) / radius;
+          const push = pushBase * w * w;
+          n.x += hitNx * push;
+          n.y += hitNy * push;
+          n.z += hitNz * push;
+          // Verlet velocity injection: move previous position backward along impulse.
+          n.px -= hitNx * push * 0.6;
+          n.py -= hitNy * push * 0.6;
+          n.pz -= hitNz * push * 0.6;
+        }
       }
 
       function updateCloth(dt) {
