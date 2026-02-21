@@ -17,6 +17,30 @@ async function parseBody(req) {
   }
 }
 
+function extractTextFromResponse(data) {
+  if (!data || typeof data !== "object") return "";
+  if (typeof data.output_text === "string" && data.output_text.trim()) return data.output_text.trim();
+  if (Array.isArray(data.output_text) && data.output_text.length) {
+    const joined = data.output_text.map((x) => String(x || "")).join("").trim();
+    if (joined) return joined;
+  }
+
+  if (Array.isArray(data.output)) {
+    const parts = [];
+    for (const item of data.output) {
+      if (!item || !Array.isArray(item.content)) continue;
+      for (const c of item.content) {
+        if (!c) continue;
+        if (typeof c.text === "string" && c.text.trim()) parts.push(c.text.trim());
+        if (typeof c.output_text === "string" && c.output_text.trim()) parts.push(c.output_text.trim());
+      }
+    }
+    const joined = parts.join(" ").trim();
+    if (joined) return joined;
+  }
+  return "";
+}
+
 export default async function handler(req, res) {
   setCors(res);
   if (req.method === "OPTIONS") {
@@ -84,9 +108,20 @@ export default async function handler(req, res) {
     }
 
     const data = await r.json();
-    const text = String(data.output_text || "").trim();
+    const text = extractTextFromResponse(data);
     if (!text) {
-      res.status(502).json({ error: "Empty output from OpenAI" });
+      res.status(502).json({
+        error: "Empty output from OpenAI",
+        detail: JSON.stringify(
+          {
+            id: data && data.id,
+            model: data && data.model,
+            output_len: Array.isArray(data && data.output) ? data.output.length : 0,
+          },
+          null,
+          0
+        ),
+      });
       return;
     }
 
