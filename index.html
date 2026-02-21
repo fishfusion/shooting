@@ -528,7 +528,7 @@
         const c = clampMag(dx, dy, 260);
         const mag01 = Math.hypot(c.x, c.y) / 260;
 
-        state.aim.yaw = clamp((c.x / 260) * 1.0, -0.95, 0.95);
+        state.aim.yaw = clamp((-c.x / 260) * 1.0, -0.95, 0.95);
         state.aim.pitch = clamp(0.22 + (-c.y / 260) * 0.9, -0.1, 0.95);
         state.aim.power = clamp(0.2 + mag01 * 0.8, 0.2, 1.0);
       }
