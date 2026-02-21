@@ -219,12 +219,6 @@
       const OPENAI_API_URL = "https://api.openai.com/v1/responses";
       const OPENAI_MODEL = "gpt-4o-mini";
       const ORIGINAL_INVITE = "恭喜你，下周六叫上Leo来我家吃烧烤吧。";
-      const FALLBACK_INVITES = [
-        "火候教人耐心，友情教人长久。下周六叫上Leo来我家吃烧烤吧。",
-        "很多答案不在远方，在一顿热气腾腾的饭里。下周六叫上Leo来我家吃烧烤吧。",
-        "人和人最好的距离，是围炉而坐。下周六叫上Leo来我家吃烧烤吧。",
-        "生活的意义，常常藏在烟火与笑声里。下周六叫上Leo来我家吃烧烤吧。",
-      ];
       const PHILOSOPHICAL_SEEDS = [
         "人生像火候，要慢慢入味",
         "关系的温度，来自一起吃饭",
@@ -264,52 +258,47 @@
         }
         return a;
       }
-      function pickFallbackInvite(exclude) {
-        const pool = FALLBACK_INVITES.filter((s) => s !== exclude);
-        if (!pool.length) return FALLBACK_INVITES[0];
-        return pool[Math.floor(Math.random() * pool.length)];
-      }
       async function generatePhilosophicalInviteLine() {
-        const fallback = pickFallbackInvite(state.lastInviteLine);
         const apiKey = localStorage.getItem("OPENAI_API_KEY");
-        if (!apiKey) return fallback;
+        if (!apiKey) return "__ERR_NO_KEY__";
 
-        const seed = PHILOSOPHICAL_SEEDS[Math.floor(Math.random() * PHILOSOPHICAL_SEEDS.length)];
-        const nonce = Date.now().toString(36).slice(-6);
-        const prompt = `写一句中文邀请语，必须保留核心意思：叫上Leo来我家吃烧烤。语气自然，有一点哲理，不要鸡汤，不要解释，只输出一句话。可参考意象：${seed}。避免与这句重复：${state.lastInviteLine || "无"}。随机标记:${nonce}`;
-
-        try {
-          const res = await fetch(OPENAI_API_URL, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: OPENAI_MODEL,
-              input: prompt,
-              temperature: 0.95,
-              max_output_tokens: 60,
-            }),
-          });
-          if (!res.ok) return fallback;
-          const data = await res.json();
-          const text =
-            (data.output_text || "").trim() ||
-            (data.output && data.output[0] && data.output[0].content && data.output[0].content[0] && data.output[0].content[0].text
-              ? String(data.output[0].content[0].text).trim()
-              : "");
-          if (!text) return fallback;
-          let clean = text.replace(/^["'“”]+|["'“”]+$/g, "");
-          // 避免退化成原句；并强制保留核心语义。
-          if (clean === ORIGINAL_INVITE) return fallback;
-          if (!/Leo/i.test(clean)) clean = `${clean} 叫上Leo。`;
-          if (!/烧烤/.test(clean)) clean = `${clean} 来我家吃烧烤吧。`;
-          if (clean === state.lastInviteLine) return fallback;
-          return clean;
-        } catch (_err) {
-          return fallback;
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const seed = PHILOSOPHICAL_SEEDS[Math.floor(Math.random() * PHILOSOPHICAL_SEEDS.length)];
+          const nonce = `${Date.now().toString(36)}-${attempt}`;
+          const prompt = `写一句中文邀请语，必须保留核心意思：叫上Leo来我家吃烧烤。语气自然，有一点哲理，不要鸡汤，不要解释，只输出一句话。可参考意象：${seed}。避免与这句重复：${state.lastInviteLine || "无"}。随机标记:${nonce}`;
+          try {
+            const res = await fetch(OPENAI_API_URL, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify({
+                model: OPENAI_MODEL,
+                input: prompt,
+                temperature: 1.05,
+                max_output_tokens: 80,
+              }),
+            });
+            if (!res.ok) continue;
+            const data = await res.json();
+            const text =
+              (data.output_text || "").trim() ||
+              (data.output && data.output[0] && data.output[0].content && data.output[0].content[0] && data.output[0].content[0].text
+                ? String(data.output[0].content[0].text).trim()
+                : "");
+            if (!text) continue;
+            let clean = text.replace(/^["'“”]+|["'“”]+$/g, "");
+            if (clean === ORIGINAL_INVITE) continue;
+            if (!/Leo/i.test(clean)) clean = `${clean} 叫上Leo。`;
+            if (!/烧烤/.test(clean)) clean = `${clean} 来我家吃烧烤吧。`;
+            if (clean === state.lastInviteLine) continue;
+            return clean;
+          } catch (_err) {
+            continue;
+          }
         }
+        return "__ERR_API_FAIL__";
       }
 
       async function showAnnouncement(src) {
@@ -317,9 +306,16 @@
         announceText.textContent = "正在生成邀请语...";
         announce.classList.add("show");
         const line = await generatePhilosophicalInviteLine();
-        const finalLine = line && line !== state.lastInviteLine ? line : pickFallbackInvite(state.lastInviteLine);
-        state.lastInviteLine = finalLine;
-        announceText.textContent = finalLine;
+        if (line === "__ERR_NO_KEY__") {
+          announceText.textContent = "未检测到 OPENAI_API_KEY，请先配置后再试。";
+          return;
+        }
+        if (line === "__ERR_API_FAIL__") {
+          announceText.textContent = "OpenAI 生成失败，请稍后重试。";
+          return;
+        }
+        state.lastInviteLine = line;
+        announceText.textContent = line;
       }
 
       function resize() {
