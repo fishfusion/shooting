@@ -1002,7 +1002,7 @@
           if (!state.targetTalkPool.length) state.targetTalkPool = shuffled(TARGET_TALK_LINES);
           const z = zs[i];
           const near01 = (farZ - z) / (farZ - nearZ);
-          const maxHp = Math.round((70 + near01 * 90) * 1.5 * 0.75);
+          const maxHp = Math.round((70 + near01 * 90) * 1.5 * 0.75 * 1.2);
           state.targets.push({
             baseX: xs[i],
             baseY: ys[i],
@@ -1491,7 +1491,7 @@
       }
       function targetRadiusFromHp(target) {
         const hp01 = target.maxHp > 0 ? clamp(target.hp / target.maxHp, 0, 1) : 0;
-        return target.baseR * (0.5 + 0.5 * hp01);
+        return target.baseR * (0.65 + 0.35 * hp01);
       }
 
       function onDown(e) {
