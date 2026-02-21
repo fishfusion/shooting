@@ -419,7 +419,7 @@
         : "/api/invite";
       const YT_BGM_VIDEO_ID = "urkZLuELFeQ";
       const YT_BGM_URL = `https://www.youtube-nocookie.com/embed/${YT_BGM_VIDEO_ID}?autoplay=1&playsinline=1&loop=1&playlist=${YT_BGM_VIDEO_ID}&controls=0&disablekb=1&rel=0&modestbranding=1`;
-      const ORIGINAL_INVITE = "恭喜你，下周六叫上Leo来我家吃烧烤吧。";
+      const ORIGINAL_INVITE = "恭喜你，下周六叫上Leo一家来我家吃烧烤吧。";
       const PHILOSOPHICAL_SEEDS = [
         "人生像火候，要慢慢入味",
         "关系的温度，来自一起吃饭",
@@ -428,10 +428,10 @@
         "快乐在分享里变大",
       ];
       const FALLBACK_INVITE_LINES = [
-        "下周六你叫上Leo来我家吃烧烤，很多话在烟火里更容易说清楚。",
-        "下周末你叫上Leo来我家吃烧烤吧，关系总要靠见面慢慢升温。",
-        "明晚你先和Leo约好，下周末一起来我家吃烧烤，热闹会把疲惫吹散。",
-        "这个周末你叫上Leo来我家吃烧烤，答案有时就藏在一桌人间烟火里。",
+        "下周六你叫上Leo一家来我家吃烧烤，很多话在烟火里更容易说清楚。",
+        "下周末你叫上Leo一家来我家吃烧烤吧，关系总要靠见面慢慢升温。",
+        "明晚你先和Leo一家约好，下周末一起来我家吃烧烤，热闹会把疲惫吹散。",
+        "这个周末你叫上Leo一家来我家吃烧烤，答案有时就藏在一桌人间烟火里。",
       ];
       const INVITE_PHILOSOPHICAL_TAILS = [
         "人与人的情分，往往就在一顿饭的烟火里慢慢长出来。",
@@ -732,7 +732,7 @@
         for (let attempt = 0; attempt < 5; attempt++) {
           const seed = PHILOSOPHICAL_SEEDS[Math.floor(Math.random() * PHILOSOPHICAL_SEEDS.length)];
           const nonce = `${Date.now().toString(36)}-${attempt}`;
-          const prompt = `写一句中文邀请语，必须保留核心意思：你下周末叫上Leo来我家吃烧烤。句子里必须出现一个明确时间点（例如：下周六/周日/周末/明晚）。语气自然，有一点哲理，不要鸡汤，不要解释，只输出一句话。可参考意象：${seed}。避免与这句重复：${state.lastInviteLine || "无"}。随机标记:${nonce}`;
+          const prompt = `写一句中文邀请语，必须保留核心意思：你下周末叫上Leo一家来我家吃烧烤。句子里必须出现一个明确时间点（例如：下周六/周日/周末/明晚）。语气自然，有一点哲理，不要鸡汤，不要解释，只输出一句话。可参考意象：${seed}。避免与这句重复：${state.lastInviteLine || "无"}。随机标记:${nonce}`;
           for (const apiUrl of apiCandidates) {
             try {
               const result = await requestProxyLine(apiUrl, {
@@ -748,10 +748,10 @@
               let clean = text.replace(/^["'“”]+|["'“”]+$/g, "");
               if (clean === ORIGINAL_INVITE) continue;
               if (/^\s*Leo[，,:：\s]/i.test(clean)) continue;
-              if (!/叫上\s*Leo/i.test(clean)) clean = `下周末你叫上Leo，${clean}`;
+              if (!/叫上\s*Leo(?:一家)?/i.test(clean)) clean = `下周末你叫上Leo一家，${clean}`;
               if (!/你/.test(clean)) clean = `你${clean}`;
               if (!hasTimePhrase(clean)) clean = `下周六${clean}`;
-              if (!/Leo/i.test(clean)) clean = `${clean} 叫上Leo。`;
+              if (!/Leo/i.test(clean)) clean = `${clean} 叫上Leo一家。`;
               if (!/烧烤/.test(clean)) clean = `${clean} 来我家吃烧烤吧。`;
               if (clean === state.lastInviteLine) continue;
               return clean;
