@@ -639,6 +639,54 @@
         }
         return out; // 20 * 15 = 300 hardcoded lines
       })();
+      const TARGET_HIT_TAUNT_FALLBACK = "狗屎运打中的吧。";
+      const TARGET_HIT_TAUNT_HEADS = [
+        "狗屎运，",
+        "这发也算，",
+        "你这一下，",
+        "这就中啦，",
+        "巧合吧，",
+        "蒙中的吧，",
+        "歪打正着，",
+        "运气不错，",
+        "这球路，",
+        "这一枪，",
+        "这都能中，",
+        "你这手气，",
+        "刚好蹭到，",
+        "险些没中，",
+        "这准头，",
+        "碰巧了，",
+        "这命中，",
+        "看着像是，",
+        "有点玄学，",
+        "你别得意，",
+      ];
+      const TARGET_HIT_TAUNT_TAILS = [
+        "打中的吧。",
+        "算你走运。",
+        "纯靠手气。",
+        "刚好碰上。",
+        "别太当真。",
+        "下次未必。",
+        "这一发不作数。",
+        "算你捡到。",
+        "我没准备好。",
+        "有点离谱啊。",
+        "真是巧了。",
+        "你先别笑。",
+        "下把见真章。",
+        "刚好擦进来。",
+        "这次放你过。",
+      ];
+      const TARGET_HIT_TAUNT_LINES = (() => {
+        const out = [];
+        for (const h of TARGET_HIT_TAUNT_HEADS) {
+          for (const t of TARGET_HIT_TAUNT_TAILS) out.push(`${h}${t}`);
+        }
+        return out; // 20 * 15 = 300 hardcoded lines
+      })();
+      const TARGET_HIT_TAUNT_SEC = 1.5;
       const TARGET_TALK_ON_SEC = 2.0;
       const TARGET_TALK_OFF_SEC = 2.0;
       const DANMU_CFG = {
@@ -682,6 +730,7 @@
         preparedMissTauntLine: "",
         missTauntPool: [],
         lastMissTauntLine: "",
+        targetHitTauntPool: [],
         consecutiveMissShots: 0,
         targetTalkPool: [],
         targetTalkActiveIndices: [],
@@ -944,6 +993,12 @@
           state.preparedMissTauntLine = generateMissTauntLine();
         }
       }
+      function nextTargetHitTauntLine() {
+        if (!state.targetHitTauntPool.length) {
+          state.targetHitTauntPool = shuffled(TARGET_HIT_TAUNT_LINES);
+        }
+        return state.targetHitTauntPool.pop() || TARGET_HIT_TAUNT_FALLBACK;
+      }
       function registerMissedShot() {
         if (state.gameOver) return;
         state.consecutiveMissShots += 1;
@@ -1015,6 +1070,7 @@
         state.rateWarningPool = shuffled(RATE_WARNING_LINES);
         state.preparedMissTauntLine = "";
         state.missTauntPool = shuffled(MISS_TAUNT_LINES);
+        state.targetHitTauntPool = shuffled(TARGET_HIT_TAUNT_LINES);
         state.targetTalkPool = shuffled(TARGET_TALK_LINES);
         state.targetTalkActiveIndices = [];
         state.targetTalkVisible = false;
@@ -1073,6 +1129,8 @@
             avZ: 0,
             portrait: selectedPortraits[i],
             talk: state.targetTalkPool.pop() || "有本事打我呀。",
+            hitTaunt: "",
+            hitTauntUntil: 0,
           });
         }
         primeInviteLine();
@@ -1758,6 +1816,8 @@
               const damage = impact * 3.2 + speed * 0.75;
               target.hp = Math.max(0, target.hp - damage);
               target.hitTimer = 0.25;
+              target.hitTaunt = nextTargetHitTauntLine();
+              target.hitTauntUntil = performance.now() * 0.001 + TARGET_HIT_TAUNT_SEC;
               state.score += 1;
               state.consecutiveMissShots = 0;
               ball.hitCd = 0.08;
@@ -2529,19 +2589,34 @@
       }
       function renderTargetTalks() {
         if (!targetTalkLayer) return;
-        updateTargetTalkActivity(performance.now() * 0.001);
+        const nowSec = performance.now() * 0.001;
+        updateTargetTalkActivity(nowSec);
         const talks = [];
-        if (!state.targetTalkVisible) {
-          for (const el of state.targetTalkNodes) el.style.display = "none";
-          return;
-        }
-        for (const i of state.targetTalkActiveIndices) {
+        const seen = new Set();
+        for (let i = 0; i < state.targets.length; i++) {
           const t = state.targets[i];
           if (!t || t.dead) continue;
+          if (t.hitTauntUntil <= nowSec) continue;
           const s = worldToScreen(t.x, t.y + t.r + 0.52, t.z);
           if (!s.ok) continue;
           if (s.sx < -120 || s.sx > state.screenW + 120 || s.sy < -80 || s.sy > state.screenH + 80) continue;
-          talks.push({ x: s.sx, y: s.sy, text: t.talk || "有本事打我呀。" });
+          talks.push({ x: s.sx, y: s.sy, text: t.hitTaunt || TARGET_HIT_TAUNT_FALLBACK });
+          seen.add(i);
+        }
+        if (state.targetTalkVisible) {
+          for (const i of state.targetTalkActiveIndices) {
+            if (seen.has(i)) continue;
+            const t = state.targets[i];
+            if (!t || t.dead) continue;
+            const s = worldToScreen(t.x, t.y + t.r + 0.52, t.z);
+            if (!s.ok) continue;
+            if (s.sx < -120 || s.sx > state.screenW + 120 || s.sy < -80 || s.sy > state.screenH + 80) continue;
+            talks.push({ x: s.sx, y: s.sy, text: t.talk || "有本事打我呀。" });
+          }
+        }
+        if (!talks.length) {
+          for (const el of state.targetTalkNodes) el.style.display = "none";
+          return;
         }
         while (state.targetTalkNodes.length < talks.length) {
           const el = document.createElement("div");
