@@ -29,14 +29,78 @@
         pointer-events: none;
         white-space: pre-line;
       }
+      #portraitLayer {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+      }
+      .portrait-disc {
+        position: absolute;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 2px solid rgba(255, 255, 255, 0.78);
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
+        transform: translate(-50%, -50%);
+        background: #1d2738;
+      }
+      .portrait-disc img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      #announce {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+      }
+      #announce.show {
+        display: flex;
+      }
+      #announceCard {
+        background: rgba(12, 18, 30, 0.84);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 18px;
+        padding: 18px 18px 14px;
+        max-width: min(86vw, 460px);
+        color: #f2f6ff;
+        text-align: center;
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.4);
+      }
+      #announceCard img {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid rgba(255, 255, 255, 0.8);
+        margin-bottom: 12px;
+      }
+      #announceCard p {
+        margin: 0;
+        font: 600 20px/1.35 "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
     </style>
   </head>
   <body>
     <canvas id="game"></canvas>
     <div id="hud"></div>
+    <div id="portraitLayer"></div>
+    <div id="announce">
+      <div id="announceCard">
+        <img id="announceImg" alt="winner" />
+        <p id="announceText"></p>
+      </div>
+    </div>
     <script>
       const canvas = document.getElementById("game");
       const hud = document.getElementById("hud");
+      const portraitLayer = document.getElementById("portraitLayer");
+      const announce = document.getElementById("announce");
+      const announceImg = document.getElementById("announceImg");
+      const announceText = document.getElementById("announceText");
       const gl = canvas.getContext("webgl", { antialias: true, alpha: false });
       if (!gl) throw new Error("WebGL not supported");
 
@@ -103,6 +167,30 @@
         color: [0.48, 0.56, 0.68],
         intensity: 0.18,
       };
+      const portraitFiles = [
+        "Alan.jpg",
+        "Ben.jpg",
+        "Humphery.jpg",
+        "Jessie.jpg",
+        "Jill.jpg",
+        "LiuYang.jpg",
+        "Lynn.jpg",
+        "Milton.jpg",
+        "NicoleChen.jpg",
+        "Sophie.jpg",
+        "WuTong.jpg",
+        "ZhangLin.jpg",
+      ];
+      const portraits = portraitFiles.map((file) => {
+        const img = new Image();
+        img.src = `Assets/${file}`;
+        return {
+          file,
+          name: file.replace(".jpg", ""),
+          src: `Assets/${file}`,
+          img,
+        };
+      });
 
       const state = {
         screenW: 0,
@@ -116,11 +204,28 @@
         score: 0,
         gameOver: false,
         gameOverText: "",
+        announceSrc: "",
+        announceName: "",
         lastT: performance.now(),
       };
 
       function clamp(v, lo, hi) {
         return Math.max(lo, Math.min(hi, v));
+      }
+      function shuffled(arr) {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const t = a[i];
+          a[i] = a[j];
+          a[j] = t;
+        }
+        return a;
+      }
+      function showAnnouncement(src) {
+        announceImg.src = src;
+        announceText.textContent = "恭喜你，下周六叫上Leo来我家吃烧烤吧。";
+        announce.classList.add("show");
       }
 
       function resize() {
@@ -156,9 +261,14 @@
         const farZ = Math.max(...zs);
         state.gameOver = false;
         state.gameOverText = "";
+        state.announceSrc = "";
+        state.announceName = "";
+        announce.classList.remove("show");
         state.balls = [];
         state.score = 0;
+        portraitLayer.innerHTML = "";
         state.targets = [];
+        const selectedPortraits = shuffled(portraits).slice(0, 6);
         for (let i = 0; i < 6; i++) {
           const z = zs[i];
           const near01 = (farZ - z) / (farZ - nearZ);
@@ -183,6 +293,10 @@
             hitTimer: 0,
             maxHp,
             hp: maxHp,
+            dead: false,
+            vz: 0,
+            portrait: selectedPortraits[i],
+            portraitEl: null,
           });
         }
       }
@@ -269,25 +383,44 @@
       }
 
       function update(dt, t) {
-        if (state.gameOver) return;
-
         for (const target of state.targets) {
-          target.anchorX = target.baseX + Math.sin(t * target.wx + target.phase) * target.sx;
-          target.anchorY = target.baseY + Math.cos(t * target.wy + target.phase * 1.3) * target.sy + target.r;
+          if (state.gameOver && !target.dead) {
+            target.hitTimer = Math.max(0, target.hitTimer - dt);
+            continue;
+          }
+          if (!target.dead) {
+            target.anchorX = target.baseX + Math.sin(t * target.wx + target.phase) * target.sx;
+            target.anchorY = target.baseY + Math.cos(t * target.wy + target.phase * 1.3) * target.sy + target.r;
 
-          const topX = target.x;
-          const topY = target.y + target.r;
-          const dx = target.anchorX - topX;
-          const dy = target.anchorY - topY;
-          const ax = world.targetSpring * dx - world.targetDamping * target.vx;
-          const ay = world.targetSpring * dy - world.targetDamping * target.vy + world.targetGravity;
+            const topX = target.x;
+            const topY = target.y + target.r;
+            const dx = target.anchorX - topX;
+            const dy = target.anchorY - topY;
+            const ax = world.targetSpring * dx - world.targetDamping * target.vx;
+            const ay = world.targetSpring * dy - world.targetDamping * target.vy + world.targetGravity;
 
-          target.vx += ax * dt;
-          target.vy += ay * dt;
-          target.vx *= 0.995;
-          target.vy *= 0.995;
-          target.x += target.vx * dt;
-          target.y += target.vy * dt;
+            target.vx += ax * dt;
+            target.vy += ay * dt;
+            target.vx *= 0.995;
+            target.vy *= 0.995;
+            target.x += target.vx * dt;
+            target.y += target.vy * dt;
+          } else {
+            target.vy += world.gravity * dt;
+            target.vx *= 0.996;
+            target.vy *= 0.996;
+            target.vz *= 0.996;
+            target.x += target.vx * dt;
+            target.y += target.vy * dt;
+            target.z += target.vz * dt;
+
+            if (target.y - target.r < 0) {
+              target.y = target.r;
+              target.vy = Math.abs(target.vy) * 0.35;
+              target.vx *= 0.9;
+              target.vz *= 0.9;
+            }
+          }
           target.hitTimer = Math.max(0, target.hitTimer - dt);
         }
 
@@ -327,7 +460,10 @@
             ball.vz = -Math.abs(ball.vz) * world.wallBounce;
           }
 
+          if (state.gameOver) continue;
+
           for (const target of state.targets) {
+            if (target.dead) continue;
             const dx = ball.x - target.x;
             const dy = ball.y - target.y;
             const dz = ball.z - target.z;
@@ -362,7 +498,7 @@
             ball.vy += j * ny * invBall;
             ball.vz += j * nz * invBall;
 
-            // 目标距离固定: 不吃 z 冲量，只在 x/y 上甩动。
+            // 活着时目标距离固定: 不吃 z 冲量。
             target.vx -= j * nx * invTar;
             target.vy -= j * ny * invTar;
 
@@ -376,9 +512,13 @@
               ball.hitCd = 0.08;
               if (target.hp <= 0) {
                 state.gameOver = true;
-                state.gameOverText = "游戏结束：有圆盘被击毁";
+                state.gameOverText = `游戏结束：${target.portrait.name} 被击倒`;
                 state.drag.active = false;
-                return;
+                target.dead = true;
+                target.vz = -j * nz * invTar;
+                state.announceSrc = target.portrait.src;
+                state.announceName = target.portrait.name;
+                showAnnouncement(target.portrait.src);
               }
             }
           }
@@ -863,12 +1003,44 @@
         hud.textContent = `力度已增强\n圆盘血量 ${hpText}${state.gameOver ? `\n${state.gameOverText}` : ""}`;
       }
 
+      function ensurePortraitElement(target) {
+        if (target.portraitEl) return target.portraitEl;
+        const el = document.createElement("div");
+        el.className = "portrait-disc";
+        const img = document.createElement("img");
+        img.src = target.portrait.src;
+        img.alt = target.portrait.name;
+        el.appendChild(img);
+        portraitLayer.appendChild(el);
+        target.portraitEl = el;
+        return el;
+      }
+
+      function renderPortraits() {
+        for (const target of state.targets) {
+          const el = ensurePortraitElement(target);
+          const c = worldToScreen(target.x, target.y, target.z);
+          if (!c.ok) {
+            el.style.display = "none";
+            continue;
+          }
+          const d = target.r * c.scale * 180 * 1.75;
+          el.style.display = "block";
+          el.style.left = `${c.sx}px`;
+          el.style.top = `${c.sy}px`;
+          el.style.width = `${d}px`;
+          el.style.height = `${d}px`;
+          el.style.opacity = target.dead ? "0.9" : "1";
+        }
+      }
+
       function loop(now) {
         const dt = Math.min(0.033, (now - state.lastT) / 1000);
         state.lastT = now;
         update(dt, now / 1000);
         render();
         renderHud();
+        renderPortraits();
         requestAnimationFrame(loop);
       }
 
