@@ -302,6 +302,7 @@
         collisionRestitution: 0.12,
         collisionTangentDamping: 0.72,
         collisionSpeedDamping: 0.84,
+        timeStepScale: 1.8,
       };
 
       const cam = {
@@ -755,7 +756,8 @@
       function updateCloth(dt) {
         const cloth = state.cloth;
         if (!cloth) return;
-        const stepDt = dt / clothSetup.substeps;
+        const simDt = Math.min(0.05, dt * clothSetup.timeStepScale);
+        const stepDt = simDt / clothSetup.substeps;
         const damp = 1 - clothSetup.damping;
         for (let s = 0; s < clothSetup.substeps; s++) {
           for (const n of cloth.nodes) {
