@@ -94,12 +94,13 @@
       }
       #ytBgm {
         position: fixed;
-        width: 1px;
-        height: 1px;
-        left: -9999px;
-        top: -9999px;
-        opacity: 0;
+        width: 2px;
+        height: 2px;
+        right: 2px;
+        bottom: 2px;
+        opacity: 0.01;
         pointer-events: none;
+        z-index: 79;
       }
       #bgmBtn {
         position: fixed;
@@ -417,7 +418,7 @@
         ? "https://shooting-git-main-fishfusions-projects.vercel.app/api/invite"
         : "/api/invite";
       const YT_BGM_VIDEO_ID = "urkZLuELFeQ";
-      const YT_BGM_VOLUME = 38;
+      const YT_BGM_URL = `https://www.youtube-nocookie.com/embed/${YT_BGM_VIDEO_ID}?autoplay=1&playsinline=1&loop=1&playlist=${YT_BGM_VIDEO_ID}&controls=0&disablekb=1&rel=0&modestbranding=1`;
       const ORIGINAL_INVITE = "恭喜你，下周六叫上Leo来我家吃烧烤吧。";
       const PHILOSOPHICAL_SEEDS = [
         "人生像火候，要慢慢入味",
@@ -589,11 +590,8 @@
         announceMode: "gameover",
         danmuLanes: [],
         lastDanmuColorIndex: -1,
-        bgmPlayer: null,
-        bgmReady: false,
-        bgmStarted: false,
-        bgmPendingStart: false,
-        bgmInit: false,
+        bgmIframeMounted: false,
+        bgmRetryCount: 0,
         cloth: null,
         lastPortraitSet: "",
         lastT: performance.now(),
@@ -667,87 +665,33 @@
           if (node.parentNode) node.parentNode.removeChild(node);
         }, delay + moveDurationMs + 120);
       }
-      function createBgmPlayer() {
-        if (!ytBgmHost || state.bgmPlayer || !window.YT || !window.YT.Player) return;
-        state.bgmPlayer = new window.YT.Player(ytBgmHost, {
-          width: "1",
-          height: "1",
-          videoId: YT_BGM_VIDEO_ID,
-          playerVars: {
-            autoplay: 0,
-            controls: 0,
-            disablekb: 1,
-            playsinline: 1,
-            rel: 0,
-            modestbranding: 1,
-            loop: 1,
-            playlist: YT_BGM_VIDEO_ID,
-            origin: location.origin,
-          },
-          events: {
-            onReady: () => {
-              state.bgmReady = true;
-              try {
-                state.bgmPlayer.setVolume(YT_BGM_VOLUME);
-              } catch (_err) {}
-              if (state.bgmPendingStart) {
-                tryStartBgm();
-              }
-            },
-            onStateChange: (ev) => {
-              if (window.YT && ev.data === window.YT.PlayerState.PLAYING) {
-                state.bgmStarted = true;
-                state.bgmPendingStart = false;
-                if (bgmBtn) bgmBtn.style.display = "none";
-              } else if (
-                window.YT &&
-                (ev.data === window.YT.PlayerState.PAUSED ||
-                  ev.data === window.YT.PlayerState.ENDED ||
-                  ev.data === window.YT.PlayerState.UNSTARTED)
-              ) {
-                state.bgmStarted = false;
-                if (bgmBtn) bgmBtn.style.display = "";
-              }
-            },
-            onError: (_e) => {
-              state.bgmStarted = false;
-              if (bgmBtn) bgmBtn.style.display = "";
-              console.warn("bgm player error");
-            },
-          },
-        });
-      }
-      function initBgmPlayer() {
-        if (state.bgmInit) return;
-        state.bgmInit = true;
-        if (window.YT && window.YT.Player) {
-          createBgmPlayer();
-          return;
-        }
-        const prevReady = window.onYouTubeIframeAPIReady;
-        window.onYouTubeIframeAPIReady = () => {
-          if (typeof prevReady === "function") {
-            try {
-              prevReady();
-            } catch (_err) {}
-          }
-          createBgmPlayer();
-        };
-        const tag = document.createElement("script");
-        tag.src = "https://www.youtube.com/iframe_api";
-        tag.async = true;
-        document.head.appendChild(tag);
-      }
       function tryStartBgm() {
-        initBgmPlayer();
-        state.bgmPendingStart = true;
-        if (bgmBtn) bgmBtn.textContent = "音乐连接中...";
-        if (!state.bgmReady || !state.bgmPlayer) return;
+        if (!ytBgmHost) return;
+        state.bgmRetryCount += 1;
+        if (bgmBtn) bgmBtn.textContent = "音乐开启中...";
         try {
-          state.bgmPlayer.unMute();
-          state.bgmPlayer.setVolume(YT_BGM_VOLUME);
-          state.bgmPlayer.playVideo();
-          if (bgmBtn && !state.bgmStarted) bgmBtn.textContent = "点我继续开音乐";
+          if (!state.bgmIframeMounted) {
+            const iframe = document.createElement("iframe");
+            iframe.width = "2";
+            iframe.height = "2";
+            iframe.src = YT_BGM_URL;
+            iframe.title = "bgm";
+            iframe.allow = "autoplay; encrypted-media; picture-in-picture";
+            iframe.referrerPolicy = "strict-origin-when-cross-origin";
+            iframe.frameBorder = "0";
+            ytBgmHost.textContent = "";
+            ytBgmHost.appendChild(iframe);
+            state.bgmIframeMounted = true;
+          } else {
+            const iframe = ytBgmHost.querySelector("iframe");
+            if (iframe && iframe.contentWindow) {
+              iframe.contentWindow.postMessage(
+                JSON.stringify({ event: "command", func: "playVideo", args: [] }),
+                "*"
+              );
+            }
+          }
+          if (bgmBtn) bgmBtn.textContent = "没声音就再点一次";
         } catch (_err) {}
       }
       function extendInviteLine(baseLine) {
@@ -2447,7 +2391,6 @@
         createTargets();
       });
 
-      initBgmPlayer();
       if (bgmBtn) bgmBtn.textContent = "开启音乐";
       resize();
       createTargets();
