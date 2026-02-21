@@ -106,16 +106,6 @@
         box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
         cursor: pointer;
       }
-      #ytBgm {
-        position: fixed;
-        width: 2px;
-        height: 2px;
-        right: 2px;
-        bottom: 2px;
-        opacity: 0.01;
-        pointer-events: none;
-        z-index: 79;
-      }
     </style>
   </head>
   <body>
@@ -130,7 +120,6 @@
     </div>
     <button id="bgmBtn" type="button">开启音乐</button>
     <div id="danmuLayer"></div>
-    <div id="ytBgm" aria-hidden="true"></div>
     <script>
       const canvas = document.getElementById("game");
       const hud = document.getElementById("hud");
@@ -139,7 +128,6 @@
       const announceText = document.getElementById("announceText");
       const bgmBtn = document.getElementById("bgmBtn");
       const danmuLayer = document.getElementById("danmuLayer");
-      const ytBgmHost = document.getElementById("ytBgm");
       const restartBtn = document.getElementById("restartBtn");
       const gl = canvas.getContext("webgl", { antialias: true, alpha: false });
       if (!gl) throw new Error("WebGL not supported");
@@ -417,8 +405,10 @@
       const DEFAULT_INVITE_API = location.hostname.endsWith("github.io")
         ? "https://shooting-git-main-fishfusions-projects.vercel.app/api/invite"
         : "/api/invite";
-      const YT_BGM_VIDEO_ID = "urkZLuELFeQ";
-      const YT_BGM_URL_BASE = `https://www.youtube-nocookie.com/embed/${YT_BGM_VIDEO_ID}?autoplay=1&playsinline=1&loop=1&playlist=${YT_BGM_VIDEO_ID}&controls=0&disablekb=1&rel=0&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`;
+      const BGM_NETWORK_SRCS = [
+        "https://cdn.jsdelivr.net/gh/fishfusion/shooting@main/Assets/GRAE.mp3",
+        "https://raw.githubusercontent.com/fishfusion/shooting/main/Assets/GRAE.mp3",
+      ];
       const ORIGINAL_INVITE = "恭喜你，下周六叫上Leo一家来我家吃烧烤吧。";
       const PHILOSOPHICAL_SEEDS = [
         "人生像火候，要慢慢入味",
@@ -593,7 +583,8 @@
         bgmRetryCount: 0,
         bgmAutoAttempts: 0,
         bgmAutoTimer: 0,
-        bgmIframeMounted: false,
+        bgmAudio: null,
+        bgmSrcIndex: 0,
         cloth: null,
         lastPortraitSet: "",
         lastT: performance.now(),
@@ -668,36 +659,39 @@
         }, delay + moveDurationMs + 120);
       }
       function tryStartBgm(manual) {
-        if (!ytBgmHost) return;
         const isManual = !!manual;
         if (isManual) {
           state.bgmRetryCount += 1;
           if (bgmBtn) bgmBtn.textContent = "音乐开启中...";
         }
+        if (!state.bgmAudio) {
+          const src = BGM_NETWORK_SRCS[state.bgmSrcIndex] || BGM_NETWORK_SRCS[0];
+          const audio = new Audio(src);
+          audio.loop = true;
+          audio.preload = "auto";
+          audio.crossOrigin = "anonymous";
+          audio.volume = 0.85;
+          audio.addEventListener("error", () => {
+            state.bgmSrcIndex = (state.bgmSrcIndex + 1) % BGM_NETWORK_SRCS.length;
+            state.bgmAudio = null;
+          });
+          state.bgmAudio = audio;
+        }
         try {
-          const forceReload = isManual;
-          if (!state.bgmIframeMounted || forceReload) {
-            const iframe = document.createElement("iframe");
-            iframe.width = "2";
-            iframe.height = "2";
-            iframe.src = `${YT_BGM_URL_BASE}&t=${Date.now()}`;
-            iframe.title = "bgm";
-            iframe.allow = "autoplay; encrypted-media; picture-in-picture";
-            iframe.referrerPolicy = "strict-origin-when-cross-origin";
-            iframe.frameBorder = "0";
-            ytBgmHost.textContent = "";
-            ytBgmHost.appendChild(iframe);
-            state.bgmIframeMounted = true;
-          } else {
-            const iframe = ytBgmHost.querySelector("iframe");
-            if (iframe && iframe.contentWindow) {
-              iframe.contentWindow.postMessage(
-                JSON.stringify({ event: "command", func: "playVideo", args: [] }),
-                "*"
-              );
-            }
+          const p = state.bgmAudio.play();
+          if (p && typeof p.then === "function") {
+            p.then(() => {
+              if (bgmBtn) bgmBtn.style.display = "none";
+            }).catch(() => {
+              if (isManual) {
+                state.bgmSrcIndex = (state.bgmSrcIndex + 1) % BGM_NETWORK_SRCS.length;
+                state.bgmAudio = null;
+                if (bgmBtn) bgmBtn.textContent = "没声音就再点一次";
+              }
+            });
+          } else if (bgmBtn) {
+            bgmBtn.style.display = "none";
           }
-          if (isManual && bgmBtn) bgmBtn.textContent = "没声音就再点一次";
         } catch (_err) {}
       }
       function startAutoBgmRetries() {
