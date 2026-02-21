@@ -358,6 +358,7 @@
         aim: { yaw: 0, pitch: 0.28, power: 0.35 },
         drag: { active: false, x: 0, y: 0 },
         balls: [],
+        fragments: [],
         targets: [],
         score: 0,
         gameOver: false,
@@ -458,6 +459,7 @@
         state.announceName = "";
         announce.classList.remove("show");
         state.balls = [];
+        state.fragments = [];
         state.score = 0;
         state.targets = [];
 
@@ -509,6 +511,24 @@
 
       function spawnBall(x, y, z, vx, vy, vz) {
         state.balls.push({ x, y, z, vx, vy, vz, r: 0.28, alive: true, hitCd: 0 });
+      }
+
+      function spawnBallFragments(ball) {
+        const count = 14;
+        for (let i = 0; i < count; i++) {
+          const dir = normalize3(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1);
+          const speed = 3 + Math.random() * 6;
+          state.fragments.push({
+            x: ball.x,
+            y: ball.y,
+            z: ball.z,
+            vx: ball.vx * 0.25 + dir.x * speed,
+            vy: ball.vy * 0.2 + Math.abs(dir.y) * speed * 0.9,
+            vz: ball.vz * 0.25 + dir.z * speed,
+            r: 0.05 + Math.random() * 0.05,
+            life: 0.95 + Math.random() * 0.55,
+          });
+        }
       }
 
       function onDown(e) {
@@ -688,13 +708,33 @@
                 showAnnouncement(target.portrait.src);
               }
             }
-            // 子弹命中任意目标后立即销毁，防止重复击打。
+            // 子弹命中任意目标后碎裂并销毁，防止重复击打。
+            spawnBallFragments(ball);
             ball.alive = false;
             break;
           }
         }
 
+        for (const f of state.fragments) {
+          f.life -= dt;
+          f.vy += world.gravity * dt;
+          f.vx *= 0.992;
+          f.vy *= 0.992;
+          f.vz *= 0.992;
+          f.x += f.vx * dt;
+          f.y += f.vy * dt;
+          f.z += f.vz * dt;
+
+          if (f.y - f.r < 0) {
+            f.y = f.r;
+            f.vy = Math.abs(f.vy) * 0.34;
+            f.vx *= 0.86;
+            f.vz *= 0.86;
+          }
+        }
+
         state.balls = state.balls.filter((b) => b.alive || (b.z < 42 && b.y > -2));
+        state.fragments = state.fragments.filter((f) => f.life > 0 && f.z < 42 && f.y > -2);
       }
 
       function normalize3(x, y, z) {
@@ -1093,6 +1133,9 @@
         for (const b of state.balls) {
           if (!b.alive) continue;
           addSphereMesh(meshVerts, { x: b.x, y: b.y, z: b.z }, b.r, [0.18, 0.22, 0.3, 1], 10, 16);
+        }
+        for (const f of state.fragments) {
+          addSphereMesh(meshVerts, { x: f.x, y: f.y, z: f.z }, f.r, [0.2, 0.22, 0.28, 1], 7, 10);
         }
 
         for (const t of state.targets) {
