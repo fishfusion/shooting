@@ -1070,9 +1070,11 @@
           if (o.type === "target") {
             const t = o.ref;
             drawTargetShadows(tris, t);
-            const hp01 = t.maxHp > 0 ? t.hp / t.maxHp : 0;
-            const col = t.hitTimer > 0 ? [0.95, 0.45, 0.34] : [0.72, 0.38 + hp01 * 0.12, 0.34 + hp01 * 0.1];
-            drawLitDisk(tris, t, col);
+            if (t.dead) {
+              const hp01 = t.maxHp > 0 ? t.hp / t.maxHp : 0;
+              const col = t.hitTimer > 0 ? [0.95, 0.45, 0.34] : [0.72, 0.38 + hp01 * 0.12, 0.34 + hp01 * 0.1];
+              drawLitDisk(tris, t, col);
+            }
           } else {
             const b = o.ref;
             const sh = worldToScreen(b.x, 0.02, b.z);
