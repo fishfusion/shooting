@@ -366,6 +366,8 @@
         announceSrc: "",
         announceName: "",
         lastInviteLine: "",
+        preparedInviteLine: "",
+        invitePrefetching: false,
         lastPortraitSet: "",
         lastT: performance.now(),
       };
@@ -428,16 +430,33 @@
 
       async function showAnnouncement(src) {
         announceImg.src = src;
-        announceText.textContent = "正在生成邀请语...";
         announce.classList.add("show");
-        const line = await generatePhilosophicalInviteLine();
+        let line = state.preparedInviteLine || "";
+        state.preparedInviteLine = "";
+        if (!line) {
+          line = await generatePhilosophicalInviteLine();
+        }
         if (line.startsWith("__ERR_PROXY_FAIL__")) {
           const detail = line.split(":").slice(1).join(":").trim();
           announceText.textContent = detail ? `生成服务不可用：${detail}` : "生成服务不可用，请检查后端代理配置。";
+          primeInviteLine();
           return;
         }
         state.lastInviteLine = line;
         announceText.textContent = line;
+        primeInviteLine();
+      }
+
+      function primeInviteLine() {
+        if (state.invitePrefetching || state.preparedInviteLine) return;
+        state.invitePrefetching = true;
+        generatePhilosophicalInviteLine()
+          .then((line) => {
+            if (line && !line.startsWith("__ERR_PROXY_FAIL__")) state.preparedInviteLine = line;
+          })
+          .finally(() => {
+            state.invitePrefetching = false;
+          });
       }
 
       function resize() {
@@ -467,6 +486,8 @@
         state.fragments = [];
         state.score = 0;
         state.targets = [];
+        state.preparedInviteLine = "";
+        state.invitePrefetching = false;
 
         let selectedPortraits = shuffled(portraits).slice(0, 6);
         let sig = selectedPortraits.map((p) => p.file).join("|");
@@ -514,6 +535,7 @@
             portrait: selectedPortraits[i],
           });
         }
+        primeInviteLine();
       }
 
       function pointerPos(e) {
