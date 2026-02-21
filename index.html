@@ -80,13 +80,6 @@
         will-change: transform;
         font: 700 25px/1 "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
         text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
-        opacity: 0.78;
-      }
-      .danmu-msg.warning {
-        color: #d9e7ff;
-      }
-      .danmu-msg.taunt {
-        color: #ffe3e3;
       }
       #restartBtn {
         margin-top: 14px;
@@ -540,6 +533,15 @@
         speedPxPerSec: 260,
         laneGapPx: 120,
       };
+      const DANMU_COLOR_POOL = [
+        "rgba(138, 237, 255, 0.56)",
+        "rgba(167, 255, 212, 0.56)",
+        "rgba(255, 244, 142, 0.56)",
+        "rgba(173, 208, 255, 0.56)",
+        "rgba(206, 255, 150, 0.56)",
+        "rgba(255, 214, 130, 0.56)",
+        "rgba(201, 255, 245, 0.56)",
+      ];
 
       const state = {
         screenW: 0,
@@ -570,6 +572,7 @@
         nextRatePopupTime: 0,
         announceMode: "gameover",
         danmuLanes: [],
+        lastDanmuColorIndex: -1,
         bgmPlayer: null,
         bgmReady: false,
         bgmStarted: false,
@@ -619,6 +622,12 @@
         const node = document.createElement("div");
         node.className = `danmu-msg ${kind === "taunt" ? "taunt" : "warning"}`;
         node.textContent = text;
+        let colorIndex = Math.floor(Math.random() * DANMU_COLOR_POOL.length);
+        if (DANMU_COLOR_POOL.length > 1 && colorIndex === state.lastDanmuColorIndex) {
+          colorIndex = (colorIndex + 1 + Math.floor(Math.random() * (DANMU_COLOR_POOL.length - 1))) % DANMU_COLOR_POOL.length;
+        }
+        state.lastDanmuColorIndex = colorIndex;
+        node.style.color = DANMU_COLOR_POOL[colorIndex];
         node.style.top = `${laneTop}px`;
         node.style.transform = `translateX(${state.screenW + 32}px)`;
         danmuLayer.appendChild(node);
