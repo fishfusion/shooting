@@ -413,6 +413,9 @@
         const p = e.touches ? e.touches[0] : e;
         return screenToDesign(p.clientX, p.clientY);
       }
+      function isFireLocked() {
+        return announce.classList.contains("show");
+      }
 
       function spawnBall(x, y, z, vx, vy, vz) {
         state.balls.push({
@@ -429,6 +432,10 @@
       }
 
       function onDown(e) {
+        if (isFireLocked()) {
+          state.drag.active = false;
+          return;
+        }
         e.preventDefault();
         const p = pointerPos(e);
         state.drag.active = true;
@@ -437,6 +444,7 @@
       }
 
       function onMove(e) {
+        if (isFireLocked()) return;
         if (!state.drag.active) return;
         e.preventDefault();
         const p = pointerPos(e);
@@ -457,6 +465,10 @@
       }
 
       function onUp(e) {
+        if (isFireLocked()) {
+          state.drag.active = false;
+          return;
+        }
         if (!state.drag.active) return;
         e.preventDefault();
         state.drag.active = false;
