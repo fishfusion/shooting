@@ -405,6 +405,9 @@
             if (!text) continue;
             let clean = text.replace(/^["'“”]+|["'“”]+$/g, "");
             if (clean === ORIGINAL_INVITE) continue;
+            if (/^\s*Leo[，,:：\s]/i.test(clean)) continue;
+            if (!/叫上\s*Leo/i.test(clean)) clean = `下周末你叫上Leo，${clean}`;
+            if (!/你/.test(clean)) clean = `你${clean}`;
             if (!/Leo/i.test(clean)) clean = `${clean} 叫上Leo。`;
             if (!/烧烤/.test(clean)) clean = `${clean} 来我家吃烧烤吧。`;
             if (clean === state.lastInviteLine) continue;

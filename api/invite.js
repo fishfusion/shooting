@@ -89,7 +89,7 @@ export default async function handler(req, res) {
           {
             role: "system",
             content:
-              "你只输出一句中文。要有一点哲理，但自然口语。必须包含“Leo”和“烧烤”，并且表达邀请Leo来我家吃烧烤。",
+              "你只输出一句中文。对话对象是玩家（用“你”），不是Leo本人。核心意思必须是：让玩家下周末叫上Leo，一起来我家吃烧烤。语气自然，有一点哲理，不鸡汤。必须包含“叫上Leo”和“烧烤”。禁止以“Leo”开头或直接称呼“Leo，”。",
           },
           {
             role: "user",
