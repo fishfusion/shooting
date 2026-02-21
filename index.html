@@ -630,7 +630,7 @@
             const px = clothSetup.xMin + x * dx;
             const pin = y === 0 && rivetCols.has(x);
             const release01 = y / Math.max(1, rows - 1);
-            const py = pin ? clothSetup.topY : clothSetup.topY;
+            const py = clothSetup.topY - y * dy;
             const pz = pin ? clothSetup.z : clothSetup.z + clothSetup.initialReleaseDepth * release01;
             nodes[x + y * cols] = {
               x: px,
