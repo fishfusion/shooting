@@ -831,30 +831,88 @@
         let hit = false;
         let bestT = 1;
         let hitNx = 0, hitNy = 0, hitNz = 0;
+        const insideTri = (p, a, b, c, n) => {
+          const e0 = sub3(b, a), vp0 = sub3(p, a);
+          const e1 = sub3(c, b), vp1 = sub3(p, b);
+          const e2 = sub3(a, c), vp2 = sub3(p, c);
+          const c0 = dot3(cross3(e0, vp0), n);
+          const c1 = dot3(cross3(e1, vp1), n);
+          const c2 = dot3(cross3(e2, vp2), n);
+          const eps = -1e-5;
+          return c0 >= eps && c1 >= eps && c2 >= eps;
+        };
+        const trySweepTri = (a, b, c) => {
+          const ab = sub3(b, a);
+          const ac = sub3(c, a);
+          const rawN = cross3(ab, ac);
+          const nLen = Math.hypot(rawN.x, rawN.y, rawN.z);
+          if (nLen < 1e-8) return;
+          const n = { x: rawN.x / nLen, y: rawN.y / nLen, z: rawN.z / nLen };
 
-        for (const n of cloth.nodes) {
-          const wx = n.x - sx;
-          const wy = n.y - sy;
-          const wz = n.z - sz;
-          const t = clamp((wx * dx + wy * dy + wz * dz) / segLen2, 0, 1);
-          const cx = sx + dx * t;
-          const cy = sy + dy * t;
-          const cz = sz + dz * t;
-          const ox = cx - n.x;
-          const oy = cy - n.y;
-          const oz = cz - n.z;
-          const dist2 = ox * ox + oy * oy + oz * oz;
-          if (dist2 >= rr * rr) continue;
-          const dist = Math.sqrt(Math.max(1e-10, dist2));
-          const nx = ox / dist;
-          const ny = oy / dist;
-          const nz = oz / dist;
-          if (!hit || t < bestT) {
+          const d0 = (sx - a.x) * n.x + (sy - a.y) * n.y + (sz - a.z) * n.z;
+          const d1 = (ex - a.x) * n.x + (ey - a.y) * n.y + (ez - a.z) * n.z;
+          const dd = d1 - d0;
+          if (Math.abs(dd) < 1e-8) return;
+
+          for (const side of [1, -1]) {
+            const target = rr * side;
+            const t = (target - d0) / dd;
+            if (t < 0 || t > bestT) continue;
+            const cx = sx + dx * t;
+            const cy = sy + dy * t;
+            const cz = sz + dz * t;
+            const dist = (cx - a.x) * n.x + (cy - a.y) * n.y + (cz - a.z) * n.z;
+            const p = { x: cx - n.x * dist, y: cy - n.y * dist, z: cz - n.z * dist };
+            if (!insideTri(p, a, b, c, n)) continue;
             hit = true;
             bestT = t;
-            hitNx = nx;
-            hitNy = ny;
-            hitNz = nz;
+            hitNx = n.x * side;
+            hitNy = n.y * side;
+            hitNz = n.z * side;
+          }
+        };
+
+        for (let y = 0; y < cloth.rows - 1; y++) {
+          for (let x = 0; x < cloth.cols - 1; x++) {
+            const i00 = x + y * cloth.cols;
+            const i10 = i00 + 1;
+            const i01 = i00 + cloth.cols;
+            const i11 = i01 + 1;
+            const p00 = cloth.nodes[i00];
+            const p10 = cloth.nodes[i10];
+            const p01 = cloth.nodes[i01];
+            const p11 = cloth.nodes[i11];
+            trySweepTri(p00, p01, p11);
+            trySweepTri(p00, p11, p10);
+          }
+        }
+
+        // Fallback for edge/corner cases: node sweep.
+        if (!hit) {
+          for (const n of cloth.nodes) {
+            const wx = n.x - sx;
+            const wy = n.y - sy;
+            const wz = n.z - sz;
+            const t = clamp((wx * dx + wy * dy + wz * dz) / segLen2, 0, 1);
+            const cx = sx + dx * t;
+            const cy = sy + dy * t;
+            const cz = sz + dz * t;
+            const ox = cx - n.x;
+            const oy = cy - n.y;
+            const oz = cz - n.z;
+            const dist2 = ox * ox + oy * oy + oz * oz;
+            if (dist2 >= rr * rr) continue;
+            const dist = Math.sqrt(Math.max(1e-10, dist2));
+            const nx = ox / dist;
+            const ny = oy / dist;
+            const nz = oz / dist;
+            if (!hit || t < bestT) {
+              hit = true;
+              bestT = t;
+              hitNx = nx;
+              hitNy = ny;
+              hitNz = nz;
+            }
           }
         }
 
