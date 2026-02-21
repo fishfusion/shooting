@@ -1020,11 +1020,6 @@
             ball.vx = -Math.abs(ball.vx) * world.wallBounce;
           }
 
-          if (ball.z > 35) {
-            ball.z = 35;
-            ball.vz = -Math.abs(ball.vz) * world.wallBounce;
-          }
-
           for (const target of state.targets) {
             if (target.dead) continue;
             const dx = ball.x - target.x;
