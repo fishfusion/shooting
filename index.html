@@ -73,7 +73,7 @@
         display: flex;
       }
       #announceCard {
-        background: rgba(12, 18, 30, 0.84);
+        background: rgba(12, 18, 30, 0.58);
         border: 1px solid rgba(255, 255, 255, 0.2);
         border-radius: 18px;
         padding: 18px 18px 14px;
@@ -218,6 +218,7 @@
       });
       const OPENAI_API_URL = "https://api.openai.com/v1/responses";
       const OPENAI_MODEL = "gpt-4o-mini";
+      const ORIGINAL_INVITE = "恭喜你，下周六叫上Leo来我家吃烧烤吧。";
       const FALLBACK_INVITES = [
         "火候教人耐心，友情教人长久。下周六叫上Leo来我家吃烧烤吧。",
         "很多答案不在远方，在一顿热气腾腾的饭里。下周六叫上Leo来我家吃烧烤吧。",
@@ -292,7 +293,12 @@
               ? String(data.output[0].content[0].text).trim()
               : "");
           if (!text) return fallback;
-          return text.replace(/^["'“”]+|["'“”]+$/g, "");
+          let clean = text.replace(/^["'“”]+|["'“”]+$/g, "");
+          // 避免退化成原句；并强制保留核心语义。
+          if (clean === ORIGINAL_INVITE) return fallback;
+          if (!/Leo/i.test(clean)) clean = `${clean} 叫上Leo。`;
+          if (!/烧烤/.test(clean)) clean = `${clean} 来我家吃烧烤吧。`;
+          return clean;
         } catch (_err) {
           return fallback;
         }
@@ -530,8 +536,6 @@
             ball.z = 35;
             ball.vz = -Math.abs(ball.vz) * world.wallBounce;
           }
-
-          if (state.gameOver) continue;
 
           for (const target of state.targets) {
             if (target.dead) continue;
