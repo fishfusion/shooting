@@ -531,7 +531,7 @@
       }
 
       function spawnBall(x, y, z, vx, vy, vz) {
-        state.balls.push({ x, y, z, vx, vy, vz, r: 0.28, alive: true, hitCd: 0 });
+        state.balls.push({ x, y, z, vx, vy, vz, r: 0.28, alive: true, stopped: false, hitCd: 0 });
       }
 
       function spawnBallFragments(ball) {
@@ -653,6 +653,7 @@
 
         for (const ball of state.balls) {
           if (!ball.alive) continue;
+          if (ball.stopped) continue;
           ball.hitCd = Math.max(0, ball.hitCd - dt);
           ball.vy += world.gravity * dt;
           ball.vx *= world.drag;
@@ -668,7 +669,12 @@
             ball.vy = Math.abs(ball.vy) * world.bounce;
             ball.vx *= world.groundFriction;
             ball.vz *= world.groundFriction;
-            if (Math.abs(ball.vy) < 1.1 && Math.hypot(ball.vx, ball.vz) < 1.0) ball.alive = false;
+            if (Math.abs(ball.vy) < 1.1 && Math.hypot(ball.vx, ball.vz) < 1.0) {
+              ball.stopped = true;
+              ball.vx = 0;
+              ball.vy = 0;
+              ball.vz = 0;
+            }
           }
 
           if (ball.x - ball.r < -7) {
@@ -772,7 +778,7 @@
           }
         }
 
-        state.balls = state.balls.filter((b) => b.alive || (b.z < 42 && b.y > -2));
+        state.balls = state.balls.filter((b) => b.stopped || (b.alive && b.z < 42 && b.y > -2));
         state.fragments = state.fragments.filter((f) => f.life > 0 && f.z < 42 && f.y > -2);
       }
 
