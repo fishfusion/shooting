@@ -300,9 +300,9 @@
         tetherCompliance: 0.00001,
         groundY: 0.03,
         initialReleaseDepth: 14,
-        collisionRestitution: 0.0,
-        collisionTangentDamping: 0.52,
-        collisionSpeedDamping: 0.68,
+        collisionRestitution: 0.06,
+        collisionTangentDamping: 0.9,
+        collisionSpeedDamping: 0.96,
         timeStepScale: 1.8,
       };
 
@@ -694,7 +694,7 @@
         }
       }
 
-      function solveClothBallCollision() {
+      function solveClothBallCollision(applyVelocityResponse) {
         const cloth = state.cloth;
         if (!cloth) return;
         const restitution = clothSetup.collisionRestitution;
@@ -735,9 +735,10 @@
           const nx = nsumX / nm;
           const ny = nsumY / nm;
           const nz = nsumZ / nm;
-          const vn = ball.vx * nx + ball.vy * ny + ball.vz * nz;
+          if (!applyVelocityResponse) continue;
 
           // Remove incoming normal speed (no bounce), keep a tiny rebound only if configured.
+          const vn = ball.vx * nx + ball.vy * ny + ball.vz * nz;
           if (vn > 0) {
             const keep = -vn * restitution;
             const dv = vn - keep;
@@ -758,7 +759,7 @@
           ball.vy = vny + vty * tangentDamping;
           ball.vz = vnz + vtz * tangentDamping;
 
-          const penDamp = Math.max(0.45, 1 - maxPen * 4.0);
+          const penDamp = Math.max(0.82, 1 - maxPen * 1.1);
           ball.vx *= speedDamping * penDamp;
           ball.vy *= speedDamping * penDamp;
           ball.vz *= speedDamping * penDamp;
@@ -801,7 +802,7 @@
           for (const c of cloth.constraints) c.lambda = 0;
           for (let i = 0; i < clothSetup.iterations; i++) {
             solveClothConstraints(stepDt);
-            solveClothBallCollision();
+            solveClothBallCollision(i === clothSetup.iterations - 1);
             solveClothGroundCollision();
           }
         }
