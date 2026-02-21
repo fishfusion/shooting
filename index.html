@@ -159,6 +159,7 @@
       const restartBtn = document.getElementById("restartBtn");
       const gl = canvas.getContext("webgl", { antialias: true, alpha: false });
       if (!gl) throw new Error("WebGL not supported");
+      const isLikelyMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "") || (window.innerWidth <= 900 && "ontouchstart" in window);
 
       const meshVS = `
         attribute vec3 a_pos;
@@ -371,6 +372,11 @@
         ballCcdSubsteps: 10,
         topEdgeSag: 0.9,
       };
+      if (isLikelyMobile) {
+        clothSetup.substeps = 3;
+        clothSetup.iterations = 5;
+        clothSetup.ballCcdSubsteps = 8;
+      }
 
       const cam = {
         pos: { x: 0, y: 3.8, z: -16 },
@@ -654,6 +660,7 @@
         targetTalkActiveIndices: [],
         targetTalkVisible: false,
         targetTalkNextSwitch: 0,
+        targetTalkNodes: [],
         recentShotTs: [],
         nextRatePopupTime: 0,
         announceMode: "gameover",
@@ -941,7 +948,8 @@
       }
 
       function resize() {
-        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const dprCap = isLikelyMobile ? 1.25 : 2;
+        const dpr = Math.min(dprCap, window.devicePixelRatio || 1);
         state.screenW = window.innerWidth;
         state.screenH = window.innerHeight;
         canvas.width = Math.floor(state.screenW * dpr);
@@ -973,6 +981,8 @@
         state.fragments = [];
         state.score = 0;
         state.targets = [];
+        if (targetTalkLayer) targetTalkLayer.textContent = "";
+        state.targetTalkNodes = [];
         state.recentShotTs = [];
         state.preparedRateWarningLine = "";
         state.rateWarningPool = shuffled(RATE_WARNING_LINES);
@@ -2481,7 +2491,7 @@
         updateTargetTalkActivity(performance.now() * 0.001);
         const talks = [];
         if (!state.targetTalkVisible) {
-          targetTalkLayer.textContent = "";
+          for (const el of state.targetTalkNodes) el.style.display = "none";
           return;
         }
         for (const i of state.targetTalkActiveIndices) {
@@ -2492,14 +2502,23 @@
           if (s.sx < -120 || s.sx > state.screenW + 120 || s.sy < -80 || s.sy > state.screenH + 80) continue;
           talks.push({ x: s.sx, y: s.sy, text: t.talk || "有本事打我呀。" });
         }
-        targetTalkLayer.textContent = "";
-        for (const item of talks) {
+        while (state.targetTalkNodes.length < talks.length) {
           const el = document.createElement("div");
           el.className = "target-talk";
+          targetTalkLayer.appendChild(el);
+          state.targetTalkNodes.push(el);
+        }
+        for (let i = 0; i < state.targetTalkNodes.length; i++) {
+          const el = state.targetTalkNodes[i];
+          const item = talks[i];
+          if (!item) {
+            el.style.display = "none";
+            continue;
+          }
+          el.style.display = "";
           el.style.left = `${item.x}px`;
           el.style.top = `${item.y}px`;
-          el.textContent = item.text;
-          targetTalkLayer.appendChild(el);
+          if (el.textContent !== item.text) el.textContent = item.text;
         }
       }
 
