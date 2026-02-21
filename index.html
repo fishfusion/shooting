@@ -43,9 +43,6 @@
       #announce.show {
         display: flex;
       }
-      #announce.warning {
-        padding-bottom: 22vh;
-      }
       #announceCard {
         background: rgba(12, 18, 30, 0.58);
         border: 1px solid rgba(255, 255, 255, 0.2);
@@ -68,55 +65,28 @@
         margin: 0;
         font: 600 20px/1.35 "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
       }
-      #announce.warning #announceCard {
-        background: rgba(12, 18, 30, 0.38);
-        border: 0;
-        box-shadow: none;
-        padding: 12px 14px;
-      }
-      #announce.warning #announceCard img {
-        display: none;
-      }
-      #announce.warning #announceCard p {
-        font: 700 22px/1.2 "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
-        color: rgba(242, 246, 255, 0.68);
-      }
-      #taunt {
+      #danmuLayer {
         position: fixed;
         inset: 0;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        padding-bottom: 32vh;
+        overflow: hidden;
         pointer-events: none;
         z-index: 61;
       }
-      #taunt.show {
-        display: flex;
+      .danmu-msg {
+        position: absolute;
+        left: 0;
+        top: 0;
+        white-space: nowrap;
+        will-change: transform;
+        font: 700 25px/1 "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+        opacity: 0.78;
       }
-      #tauntCard {
-        background: transparent;
-        border: 0;
-        box-shadow: none;
-        padding: 8px 10px;
-        color: #f2f6ff;
-        text-align: center;
-        max-width: min(88vw, 580px);
+      .danmu-msg.warning {
+        color: #d9e7ff;
       }
-      #tauntCard img {
-        display: block;
-        width: 82px;
-        height: 82px;
-        margin: 0 auto 8px;
-        border: 0;
-        border-radius: 50%;
-        object-fit: cover;
-      }
-      #tauntCard p {
-        margin: 0;
-        font: 700 21px/1.2 "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
-        color: rgba(242, 246, 255, 0.66);
-        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+      .danmu-msg.taunt {
+        color: #ffe3e3;
       }
       #restartBtn {
         margin-top: 14px;
@@ -150,12 +120,7 @@
         <button id="restartBtn" type="button">确定</button>
       </div>
     </div>
-    <div id="taunt">
-      <div id="tauntCard">
-        <img id="tauntImg" alt="taunt" />
-        <p id="tauntText"></p>
-      </div>
-    </div>
+    <div id="danmuLayer"></div>
     <div id="ytBgm" aria-hidden="true"></div>
     <script>
       const canvas = document.getElementById("game");
@@ -163,9 +128,7 @@
       const announce = document.getElementById("announce");
       const announceImg = document.getElementById("announceImg");
       const announceText = document.getElementById("announceText");
-      const taunt = document.getElementById("taunt");
-      const tauntImg = document.getElementById("tauntImg");
-      const tauntText = document.getElementById("tauntText");
+      const danmuLayer = document.getElementById("danmuLayer");
       const ytBgmHost = document.getElementById("ytBgm");
       const restartBtn = document.getElementById("restartBtn");
       const gl = canvas.getContext("webgl", { antialias: true, alpha: false });
@@ -569,6 +532,14 @@
         }
         return out; // 20 * 15 = 300 hardcoded lines
       })();
+      const DANMU_CFG = {
+        topOffset: 72,
+        laneHeight: 34,
+        maxLanes: 7,
+        minLanes: 4,
+        speedPxPerSec: 260,
+        laneGapPx: 120,
+      };
 
       const state = {
         screenW: 0,
@@ -598,8 +569,7 @@
         recentShotTs: [],
         nextRatePopupTime: 0,
         announceMode: "gameover",
-        warningTimer: 0,
-        tauntTimer: 0,
+        danmuLanes: [],
         bgmPlayer: null,
         bgmReady: false,
         bgmStarted: false,
@@ -625,6 +595,52 @@
       }
       function hasTimePhrase(text) {
         return /(下周[一二三四五六日天末]?|周[一二三四五六日天末]|周末|今晚|明晚|明天|后天|本周|这个周末|下个周末)/.test(text);
+      }
+      function resetDanmuLanes() {
+        const usableH = Math.max(160, state.screenH * 0.42);
+        const laneCount = clamp(Math.floor(usableH / DANMU_CFG.laneHeight), DANMU_CFG.minLanes, DANMU_CFG.maxLanes);
+        state.danmuLanes = new Array(laneCount).fill(0).map(() => ({ nextStartAt: 0 }));
+      }
+      function emitDanmu(text, kind) {
+        if (!text || !danmuLayer) return;
+        if (!state.danmuLanes.length) resetDanmuLanes();
+        const now = performance.now();
+        let laneIndex = 0;
+        let laneReady = state.danmuLanes[0].nextStartAt;
+        for (let i = 1; i < state.danmuLanes.length; i++) {
+          if (state.danmuLanes[i].nextStartAt < laneReady) {
+            laneReady = state.danmuLanes[i].nextStartAt;
+            laneIndex = i;
+          }
+        }
+        const delay = Math.max(0, laneReady - now);
+        const laneTop = DANMU_CFG.topOffset + laneIndex * DANMU_CFG.laneHeight;
+
+        const node = document.createElement("div");
+        node.className = `danmu-msg ${kind === "taunt" ? "taunt" : "warning"}`;
+        node.textContent = text;
+        node.style.top = `${laneTop}px`;
+        node.style.transform = `translateX(${state.screenW + 32}px)`;
+        danmuLayer.appendChild(node);
+
+        const width = Math.max(60, Math.ceil(node.getBoundingClientRect().width));
+        const moveDistance = state.screenW + width + 120;
+        const moveDurationMs = (moveDistance / DANMU_CFG.speedPxPerSec) * 1000;
+        const safeGapMs = ((width + DANMU_CFG.laneGapPx) / DANMU_CFG.speedPxPerSec) * 1000;
+        state.danmuLanes[laneIndex].nextStartAt = now + delay + safeGapMs;
+
+        const go = () => {
+          node.style.transition = `transform ${moveDurationMs}ms linear`;
+          node.style.transform = `translateX(${-width - 80}px)`;
+        };
+        if (delay > 0) {
+          setTimeout(() => requestAnimationFrame(go), delay);
+        } else {
+          requestAnimationFrame(go);
+        }
+        setTimeout(() => {
+          if (node.parentNode) node.parentNode.removeChild(node);
+        }, delay + moveDurationMs + 120);
       }
       function createBgmPlayer() {
         if (!ytBgmHost || state.bgmPlayer || !window.YT || !window.YT.Player) return;
@@ -785,10 +801,8 @@
       }
 
       async function showAnnouncement(src) {
-        clearTimeout(state.warningTimer);
-        clearTimeout(state.tauntTimer);
-        taunt.classList.remove("show");
-        announce.classList.remove("warning");
+        if (danmuLayer) danmuLayer.textContent = "";
+        for (const lane of state.danmuLanes) lane.nextStartAt = 0;
         announceImg.src = src;
         announce.classList.add("show");
         state.announceMode = "gameover";
@@ -811,33 +825,11 @@
 
       function showRateWarningPopup(line) {
         if (state.gameOver) return;
-        clearTimeout(state.warningTimer);
-        state.announceMode = "warning";
-        const fallbackPortrait = state.targets.find((t) => t.portrait && t.portrait.loaded)?.portrait?.src || portraits[0].src;
-        announceImg.src = fallbackPortrait;
-        announceText.textContent = line || RATE_WARNING_FALLBACK;
-        restartBtn.style.display = "none";
-        announce.classList.add("warning");
-        announce.classList.add("show");
-        state.warningTimer = setTimeout(() => {
-          if (state.announceMode === "warning") {
-            announce.classList.remove("show");
-            announce.classList.remove("warning");
-            restartBtn.style.display = "";
-            state.announceMode = "gameover";
-          }
-        }, 1000);
+        emitDanmu(line || RATE_WARNING_FALLBACK, "warning");
       }
       function showMissTauntPopup(line) {
         if (state.gameOver) return;
-        clearTimeout(state.tauntTimer);
-        const talker = portraits[Math.floor(Math.random() * portraits.length)] || portraits[0];
-        tauntImg.src = talker.src;
-        tauntText.textContent = line || MISS_TAUNT_FALLBACK;
-        taunt.classList.add("show");
-        state.tauntTimer = setTimeout(() => {
-          taunt.classList.remove("show");
-        }, 1300);
+        emitDanmu(line || MISS_TAUNT_FALLBACK, "taunt");
       }
 
       function primeInviteLine() {
@@ -908,6 +900,7 @@
         canvas.width = Math.floor(state.screenW * dpr);
         canvas.height = Math.floor(state.screenH * dpr);
         gl.viewport(0, 0, canvas.width, canvas.height);
+        resetDanmuLanes();
       }
 
       function createTargets() {
@@ -925,10 +918,8 @@
         state.announceSrc = "";
         state.announceName = "";
         announce.classList.remove("show");
-        announce.classList.remove("warning");
-        taunt.classList.remove("show");
-        clearTimeout(state.warningTimer);
-        clearTimeout(state.tauntTimer);
+        if (danmuLayer) danmuLayer.textContent = "";
+        for (const lane of state.danmuLanes) lane.nextStartAt = 0;
         restartBtn.style.display = "";
         state.announceMode = "gameover";
         state.balls = [];
@@ -2420,13 +2411,6 @@
       });
       restartBtn.addEventListener("click", () => {
         tryStartBgm();
-        if (state.announceMode === "warning") {
-          announce.classList.remove("show");
-          announce.classList.remove("warning");
-          restartBtn.style.display = "";
-          state.announceMode = "gameover";
-          return;
-        }
         createTargets();
       });
 
