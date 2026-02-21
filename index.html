@@ -1469,6 +1469,18 @@
         const cloth = state.cloth;
         if (!cloth) return;
         const base = [0.05, 0.11, 0.34, 1.0];
+        const nodeAt = (x, y) => cloth.nodes[clamp(x, 0, cloth.cols - 1) + clamp(y, 0, cloth.rows - 1) * cloth.cols];
+        const nodeNormal = (x, y) => {
+          const l = nodeAt(x - 1, y);
+          const r = nodeAt(x + 1, y);
+          const u = nodeAt(x, y - 1);
+          const d = nodeAt(x, y + 1);
+          const tx = sub3(r, l);
+          const ty = sub3(d, u);
+          let n = normalize3(cross3(tx, ty).x, cross3(tx, ty).y, cross3(tx, ty).z);
+          if (!Number.isFinite(n.x) || !Number.isFinite(n.y) || !Number.isFinite(n.z)) n = { x: 0, y: 0, z: -1 };
+          return n;
+        };
         for (let y = 0; y < cloth.rows - 1; y++) {
           for (let x = 0; x < cloth.cols - 1; x++) {
             const i00 = x + y * cloth.cols;
@@ -1479,17 +1491,16 @@
             const p10 = cloth.nodes[i10];
             const p01 = cloth.nodes[i01];
             const p11 = cloth.nodes[i11];
-
-            const e1 = sub3(p10, p00);
-            const e2 = sub3(p01, p00);
-            let n = normalize3(cross3(e1, e2).x, cross3(e1, e2).y, cross3(e1, e2).z);
-            if (!Number.isFinite(n.x)) n = { x: 0, y: 0, z: -1 };
+            const n00 = nodeNormal(x, y);
+            const n10 = nodeNormal(x + 1, y);
+            const n01 = nodeNormal(x, y + 1);
+            const n11 = nodeNormal(x + 1, y + 1);
 
             const stripe = 0.92 + 0.08 * Math.sin((x / cloth.cols) * Math.PI * 6);
             const col = [base[0] * stripe, base[1] * stripe, base[2] * stripe, 1];
 
-            pushMeshTri(meshArr, p00, n, col, p01, n, col, p11, n, col);
-            pushMeshTri(meshArr, p00, n, col, p11, n, col, p10, n, col);
+            pushMeshTri(meshArr, p00, n00, col, p01, n01, col, p11, n11, col);
+            pushMeshTri(meshArr, p00, n00, col, p11, n11, col, p10, n10, col);
           }
         }
 
