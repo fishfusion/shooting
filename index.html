@@ -307,6 +307,7 @@
         collisionMaxOutSpeed: 0.12,
         timeStepScale: 1.8,
         ballCcdSubsteps: 6,
+        topEdgeSag: 0.9,
       };
 
       const cam = {
@@ -613,17 +614,18 @@
           });
         };
         const rivetCols = new Set([0, Math.round((cols - 1) / 3), Math.round(((cols - 1) * 2) / 3), cols - 1]);
-        const nearestRivetCol = (x) => {
-          let nearest = 0;
-          let best = Infinity;
-          for (const rx of rivetCols) {
-            const d = Math.abs(rx - x);
-            if (d < best) {
-              best = d;
-              nearest = rx;
-            }
+        const rivetList = Array.from(rivetCols).sort((a, b) => a - b);
+        const topSagAt = (x) => {
+          if (rivetCols.has(x)) return 0;
+          for (let i = 0; i < rivetList.length - 1; i++) {
+            const a = rivetList[i];
+            const b = rivetList[i + 1];
+            if (x < a || x > b) continue;
+            const span = Math.max(1, b - a);
+            const u = (x - a) / span;
+            return 4 * u * (1 - u) * clothSetup.topEdgeSag;
           }
-          return nearest;
+          return clothSetup.topEdgeSag * 0.5;
         };
 
         for (let y = 0; y < rows; y++) {
@@ -631,7 +633,8 @@
             const px = clothSetup.xMin + x * dx;
             const pin = y === 0 && rivetCols.has(x);
             const release01 = y / Math.max(1, rows - 1);
-            const py = Math.max(clothSetup.groundY, clothSetup.topY - y * dy);
+            let py = Math.max(clothSetup.groundY, clothSetup.topY - y * dy);
+            if (y === 0 && !pin) py -= topSagAt(x);
             const pz = pin ? clothSetup.z : clothSetup.z + clothSetup.initialReleaseDepth * release01;
             nodes[x + y * cols] = {
               x: px,
@@ -648,17 +651,13 @@
         for (let y = 0; y < rows; y++) {
           for (let x = 0; x < cols; x++) {
             const i = x + y * cols;
-            if (x < cols - 1 && y !== 0) addConstraint(i, i + 1, clothSetup.stretchCompliance);
+            if (x < cols - 1) addConstraint(i, i + 1, clothSetup.stretchCompliance);
             if (y < rows - 1) addConstraint(i, i + cols, clothSetup.stretchCompliance);
-            if (x < cols - 2 && y !== 0) addConstraint(i, i + 2, clothSetup.bendCompliance);
+            if (x < cols - 2) addConstraint(i, i + 2, clothSetup.bendCompliance);
             if (y < rows - 2) addConstraint(i, i + cols * 2, clothSetup.bendCompliance);
             if (x < cols - 1 && y < rows - 1) {
               addConstraint(i, i + cols + 1, clothSetup.shearCompliance);
               addConstraint(i + 1, i + cols, clothSetup.shearCompliance);
-            }
-            if (y >= 2) {
-              const top = nearestRivetCol(x);
-              addConstraint(i, top, clothSetup.tetherCompliance);
             }
           }
         }
