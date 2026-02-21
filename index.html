@@ -407,7 +407,52 @@
       };
       const RATE_WARNING_FALLBACK = "省这点弹药，咱穷。";
       const RATE_WARNING_POOL_SIZE = 3;
-      const RATE_WARNING_REFRESH_MS = 9000;
+      const RATE_WARNING_HEADS = [
+        "别急，",
+        "慢点，",
+        "收手，",
+        "克制点，",
+        "你这手速，",
+        "先稳住，",
+        "节奏乱了，",
+        "别上头，",
+        "冷静一下，",
+        "先喘口气，",
+        "别猛扣，",
+        "留点余地，",
+        "别贪快，",
+        "稳着打，",
+        "火力太急，",
+        "你这样打，",
+        "再这么冲，",
+        "压一压，",
+        "先慢半拍，",
+        "控制一下，",
+      ];
+      const RATE_WARNING_TAILS = [
+        "弹药要见底了。",
+        "很快就见空仓。",
+        "会把家底打穿。",
+        "库存扛不住了。",
+        "后面会断火。",
+        "子弹要吃紧了。",
+        "再快就要穷了。",
+        "一会儿就打光。",
+        "别把预算点没了。",
+        "这样会弹尽粮绝。",
+        "后劲会不够。",
+        "弹链已经冒烟了。",
+        "很快只剩回声。",
+        "再扣就只剩空气。",
+        "省这点弹药，咱穷。",
+      ];
+      const RATE_WARNING_LINES = (() => {
+        const out = [];
+        for (const h of RATE_WARNING_HEADS) {
+          for (const t of RATE_WARNING_TAILS) out.push(`${h}${t}`);
+        }
+        return out; // 20 * 15 = 300 hardcoded lines
+      })();
 
       const state = {
         screenW: 0,
@@ -428,12 +473,7 @@
         preparedInviteLine: "",
         invitePrefetching: false,
         preparedRateWarningLine: "",
-        rateWarningPrefetching: false,
         rateWarningPool: [],
-        rateWarningRefreshTimer: 0,
-        rateWarningLastFetchOk: false,
-        rateWarningBackoffMs: 1200,
-        rateWarningApiDisableUntil: 0,
         lastRateWarningLine: "",
         recentShotTs: [],
         nextRatePopupTime: 0,
@@ -522,43 +562,15 @@
         return `__FALLBACK_INVITE__${fallback}`;
       }
 
-      async function generateRateWarningLine() {
-        if (Date.now() < state.rateWarningApiDisableUntil) return { text: RATE_WARNING_FALLBACK, fromOpenAI: false };
-        const customApiUrl = String(localStorage.getItem("OPENAI_PROXY_URL") || "").trim();
-        const useCustomOnGithub = customApiUrl && !customApiUrl.startsWith("/");
-        const apiCandidates =
-          customApiUrl && customApiUrl !== DEFAULT_INVITE_API && (!location.hostname.endsWith("github.io") || useCustomOnGithub)
-            ? [customApiUrl, DEFAULT_INVITE_API]
-            : [DEFAULT_INVITE_API];
-        let lastErr = "";
-        for (let attempt = 0; attempt < 4; attempt++) {
-          const nonce = `${Date.now().toString(36)}-w-${attempt}`;
-          const prompt = `写一句中文提醒：玩家开火太快，继续这样会弹尽粮绝。要求短促、有压迫感，不要鸡汤，不要解释。随机标记:${nonce}`;
-          for (const apiUrl of apiCandidates) {
-            try {
-              const result = await requestProxyLine(apiUrl, {
-                mode: "rate_warning",
-                input: prompt,
-                lastWarningLine: state.lastRateWarningLine || "",
-              });
-              if (!result.ok) {
-                lastErr = `${apiUrl} -> ${result.detail}`;
-                if (/HTTP\s(401|403|405)/.test(result.detail)) state.rateWarningApiDisableUntil = Date.now() + 20000;
-                continue;
-              }
-              state.rateWarningApiDisableUntil = 0;
-              const text = String(result.text || "").replace(/^["'“”]+|["'“”]+$/g, "").trim();
-              if (!text) continue;
-              if (text === state.lastRateWarningLine) continue;
-              return { text, fromOpenAI: true };
-            } catch (_err) {
-              lastErr = `${apiUrl} -> ${String(_err && _err.message ? _err.message : _err)}`;
-              if (/Failed to fetch|NetworkError|CORS|ERR_FAILED/i.test(lastErr)) state.rateWarningApiDisableUntil = Date.now() + 20000;
-            }
-          }
+      function generateRateWarningLine() {
+        if (!state.rateWarningPool.length) {
+          state.rateWarningPool = shuffled(RATE_WARNING_LINES);
         }
-        // Silence noisy network/CORS failures; fallback line is sufficient for gameplay.
-        return { text: RATE_WARNING_FALLBACK, fromOpenAI: false };
+        let line = state.rateWarningPool.pop() || RATE_WARNING_FALLBACK;
+        if (line === state.lastRateWarningLine && state.rateWarningPool.length) {
+          line = state.rateWarningPool.pop() || line;
+        }
+        return line;
       }
 
       async function showAnnouncement(src) {
@@ -615,44 +627,9 @@
           });
       }
       function primeRateWarningLine() {
-        if (Date.now() < state.rateWarningApiDisableUntil) return;
-        if (state.rateWarningPrefetching) return;
-        if (state.rateWarningPool.length >= RATE_WARNING_POOL_SIZE) return;
-        let gotOpenAI = false;
-        state.rateWarningPrefetching = true;
-        generateRateWarningLine()
-          .then((result) => {
-            if (result && result.text && result.fromOpenAI) {
-              gotOpenAI = true;
-              state.rateWarningLastFetchOk = true;
-              const line = result.text;
-              state.preparedRateWarningLine = line;
-              const prev = state.rateWarningPool[state.rateWarningPool.length - 1];
-              if (line !== prev) state.rateWarningPool.push(line);
-              while (state.rateWarningPool.length > RATE_WARNING_POOL_SIZE + 1) state.rateWarningPool.shift();
-            } else {
-              state.rateWarningLastFetchOk = false;
-            }
-          })
-          .finally(() => {
-            state.rateWarningPrefetching = false;
-            if (gotOpenAI) {
-              state.rateWarningBackoffMs = 1200;
-            } else {
-              state.rateWarningBackoffMs = Math.min(20000, Math.floor(state.rateWarningBackoffMs * 1.8));
-            }
-            if (state.rateWarningPool.length < RATE_WARNING_POOL_SIZE) {
-              const delay = gotOpenAI ? 700 : state.rateWarningBackoffMs;
-              setTimeout(() => primeRateWarningLine(), delay);
-            }
-          });
-      }
-      function startRateWarningRefresh() {
-        if (state.rateWarningRefreshTimer) clearInterval(state.rateWarningRefreshTimer);
-        state.rateWarningRefreshTimer = setInterval(() => {
-          if (Date.now() < state.rateWarningApiDisableUntil) return;
-          if (state.rateWarningPool.length < RATE_WARNING_POOL_SIZE + 1) primeRateWarningLine();
-        }, RATE_WARNING_REFRESH_MS);
+        if (!state.preparedRateWarningLine) {
+          state.preparedRateWarningLine = generateRateWarningLine();
+        }
       }
       function hitFireRateLimit() {
         const now = performance.now() * 0.001;
@@ -661,19 +638,10 @@
         if (state.recentShotTs.length >= FIRE_RATE_LIMIT.maxShots) {
           if (now >= state.nextRatePopupTime) {
             state.nextRatePopupTime = now + FIRE_RATE_LIMIT.popupCooldownSec;
-            const line = state.rateWarningPool.shift() || state.preparedRateWarningLine || RATE_WARNING_FALLBACK;
+            const line = state.preparedRateWarningLine || RATE_WARNING_FALLBACK;
             state.preparedRateWarningLine = "";
-            if (line !== RATE_WARNING_FALLBACK) state.lastRateWarningLine = line;
+            state.lastRateWarningLine = line;
             showRateWarningPopup(line);
-            if (line === RATE_WARNING_FALLBACK) {
-              generateRateWarningLine().then((result) => {
-                if (!result || !result.fromOpenAI || !result.text) return;
-                if (state.announceMode === "warning") announceText.textContent = result.text;
-                state.lastRateWarningLine = result.text;
-                const prev = state.rateWarningPool[state.rateWarningPool.length - 1];
-                if (result.text !== prev) state.rateWarningPool.push(result.text);
-              });
-            }
             primeRateWarningLine();
           }
           return true;
@@ -716,13 +684,7 @@
         state.targets = [];
         state.recentShotTs = [];
         state.preparedRateWarningLine = "";
-        state.rateWarningPool = [];
-        state.rateWarningBackoffMs = 1200;
-        state.rateWarningApiDisableUntil = 0;
-        if (state.rateWarningRefreshTimer) {
-          clearInterval(state.rateWarningRefreshTimer);
-          state.rateWarningRefreshTimer = 0;
-        }
+        state.rateWarningPool = shuffled(RATE_WARNING_LINES);
         state.nextRatePopupTime = 0;
         initCloth();
         state.preparedInviteLine = "";
@@ -777,7 +739,6 @@
         }
         primeInviteLine();
         primeRateWarningLine();
-        startRateWarningRefresh();
       }
 
       function initCloth() {
