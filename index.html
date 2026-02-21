@@ -108,13 +108,16 @@
       }
       #ytBgm {
         position: fixed;
-        width: 2px;
-        height: 2px;
-        right: 2px;
-        bottom: 2px;
-        opacity: 0.01;
-        pointer-events: none;
-        z-index: 79;
+        width: 220px;
+        height: 124px;
+        right: 12px;
+        bottom: 12px;
+        opacity: 0.96;
+        pointer-events: auto;
+        z-index: 81;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.36);
       }
     </style>
   </head>
@@ -418,7 +421,7 @@
         ? "https://shooting-git-main-fishfusions-projects.vercel.app/api/invite"
         : "/api/invite";
       const YT_BGM_VIDEO_ID = "urkZLuELFeQ";
-      const YT_BGM_URL_BASE = `https://www.youtube-nocookie.com/embed/${YT_BGM_VIDEO_ID}?autoplay=1&playsinline=1&loop=1&playlist=${YT_BGM_VIDEO_ID}&controls=0&disablekb=1&rel=0&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`;
+      const YT_BGM_URL_BASE = `https://www.youtube.com/embed/${YT_BGM_VIDEO_ID}?autoplay=1&playsinline=1&loop=1&playlist=${YT_BGM_VIDEO_ID}&controls=1&disablekb=0&rel=0&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`;
       const ORIGINAL_INVITE = "恭喜你，下周六叫上Leo一家来我家吃烧烤吧。";
       const PHILOSOPHICAL_SEEDS = [
         "人生像火候，要慢慢入味",
@@ -696,8 +699,8 @@
         try {
           if (!state.bgmIframeMounted) {
             const iframe = document.createElement("iframe");
-            iframe.width = "2";
-            iframe.height = "2";
+            iframe.width = "220";
+            iframe.height = "124";
             iframe.src = `${YT_BGM_URL_BASE}&t=${Date.now()}`;
             iframe.title = "bgm";
             iframe.allow = "autoplay; encrypted-media; picture-in-picture";
