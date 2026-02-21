@@ -383,7 +383,9 @@
         return p;
       });
 
-      const DEFAULT_INVITE_API = "/api/invite";
+      const DEFAULT_INVITE_API = location.hostname.endsWith("github.io")
+        ? "https://shooting-git-main-fishfusions-projects.vercel.app/api/invite"
+        : "/api/invite";
       const ORIGINAL_INVITE = "恭喜你，下周六叫上Leo来我家吃烧烤吧。";
       const PHILOSOPHICAL_SEEDS = [
         "人生像火候，要慢慢入味",
@@ -429,6 +431,7 @@
         rateWarningPrefetching: false,
         rateWarningPool: [],
         rateWarningRefreshTimer: 0,
+        rateWarningLastFetchOk: false,
         lastRateWarningLine: "",
         recentShotTs: [],
         nextRatePopupTime: 0,
@@ -604,16 +607,19 @@
         generateRateWarningLine()
           .then((result) => {
             if (result && result.text && result.fromOpenAI) {
+              state.rateWarningLastFetchOk = true;
               const line = result.text;
               state.preparedRateWarningLine = line;
               const prev = state.rateWarningPool[state.rateWarningPool.length - 1];
               if (line !== prev) state.rateWarningPool.push(line);
               while (state.rateWarningPool.length > RATE_WARNING_POOL_SIZE + 1) state.rateWarningPool.shift();
+            } else {
+              state.rateWarningLastFetchOk = false;
             }
           })
           .finally(() => {
             state.rateWarningPrefetching = false;
-            if (state.rateWarningPool.length < RATE_WARNING_POOL_SIZE) {
+            if (state.rateWarningLastFetchOk && state.rateWarningPool.length < RATE_WARNING_POOL_SIZE) {
               setTimeout(() => primeRateWarningLine(), 40);
             }
           });
@@ -621,6 +627,7 @@
       function startRateWarningRefresh() {
         if (state.rateWarningRefreshTimer) clearInterval(state.rateWarningRefreshTimer);
         state.rateWarningRefreshTimer = setInterval(() => {
+          if (!state.rateWarningLastFetchOk && state.rateWarningPool.length === 0) return;
           if (state.rateWarningPool.length < RATE_WARNING_POOL_SIZE + 1) primeRateWarningLine();
         }, RATE_WARNING_REFRESH_MS);
       }
