@@ -605,6 +605,8 @@
         }
         return out; // 20 * 15 = 300 hardcoded lines
       })();
+      const TARGET_TALK_ON_SEC = 2.0;
+      const TARGET_TALK_OFF_SEC = 2.0;
       const DANMU_CFG = {
         topOffset: 72,
         laneHeight: 34,
@@ -2467,11 +2469,11 @@
         if (!state.targetTalkVisible) {
           state.targetTalkVisible = true;
           state.targetTalkActiveIndices = pickTalkTargets();
-          state.targetTalkNextSwitch = nowSec + (1.0 + Math.random() * 0.9);
+          state.targetTalkNextSwitch = nowSec + TARGET_TALK_ON_SEC;
         } else {
           state.targetTalkVisible = false;
           state.targetTalkActiveIndices = [];
-          state.targetTalkNextSwitch = nowSec + (1.0 + Math.random() * 0.9);
+          state.targetTalkNextSwitch = nowSec + TARGET_TALK_OFF_SEC;
         }
       }
       function renderTargetTalks() {
