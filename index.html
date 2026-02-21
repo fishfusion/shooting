@@ -643,12 +643,12 @@
             target.y += target.vy * dt;
           } else {
             target.vy += world.gravity * dt;
-            target.vx *= 0.996;
-            target.vy *= 0.996;
-            target.vz *= 0.996;
-            target.avX *= 0.992;
-            target.avY *= 0.992;
-            target.avZ *= 0.992;
+            target.vx *= 0.998;
+            target.vy *= 0.998;
+            target.vz *= 0.998;
+            target.avX *= 0.9975;
+            target.avY *= 0.996;
+            target.avZ *= 0.9975;
             target.x += target.vx * dt;
             target.y += target.vy * dt;
             target.z += target.vz * dt;
@@ -656,19 +656,25 @@
             target.rotY += target.avY * dt;
             target.rotZ += target.avZ * dt;
 
+            // 持续重力翻倒扭矩，避免圆盘总是“立着蹦”。
+            const n = targetNormal(target);
+            const tipTorque = 4.2;
+            target.avX += n.z * tipTorque * dt;
+            target.avZ += -n.x * tipTorque * dt;
+
             const support = targetSupportRadiusY(target);
             if (target.y - support < 0) {
               target.y = support;
-              target.vy = Math.abs(target.vy) * 0.35;
-              target.vx *= 0.88;
-              target.vz *= 0.88;
-              target.avX += target.vz * 0.08;
-              target.avZ -= target.vx * 0.08;
+              target.vy = Math.abs(target.vy) * 0.22;
+              target.vx *= 0.82;
+              target.vz *= 0.82;
+              target.avX += target.vz * 0.12 + (Math.random() - 0.5) * 0.35;
+              target.avZ -= target.vx * 0.12 + (Math.random() - 0.5) * 0.35;
 
               const tilt = Math.hypot(target.rotX, target.rotZ);
-              if (tilt < 0.95) {
-                target.avX += (Math.sign(target.rotX || 1) * 1.1 + (Math.random() - 0.5) * 0.25) * dt * 60;
-                target.avZ += (Math.sign(target.rotZ || -1) * 1.1 + (Math.random() - 0.5) * 0.25) * dt * 60;
+              if (tilt < 1.25) {
+                target.avX += (Math.sign(target.rotX || 1) * 1.6 + (Math.random() - 0.5) * 0.4) * dt * 60;
+                target.avZ += (Math.sign(target.rotZ || -1) * 1.6 + (Math.random() - 0.5) * 0.4) * dt * 60;
               }
             }
           }
@@ -769,9 +775,11 @@
                 target.vx = target.vx - j * nx * invTar * 0.6;
                 target.vy = Math.min(0, target.vy - j * ny * invTar);
                 target.vz = -j * nz * invTar;
-                target.avX = (0.8 + Math.random() * 1.4) * (Math.random() > 0.5 ? 1 : -1) + target.vz * 0.05;
+                target.rotX = (0.24 + Math.random() * 0.32) * (Math.random() > 0.5 ? 1 : -1);
+                target.rotZ = (0.24 + Math.random() * 0.32) * (Math.random() > 0.5 ? 1 : -1);
+                target.avX = (2.2 + Math.random() * 2.0) * (Math.random() > 0.5 ? 1 : -1) + target.vz * 0.08;
                 target.avY = (Math.random() - 0.5) * 1.2;
-                target.avZ = (0.8 + Math.random() * 1.4) * (Math.random() > 0.5 ? 1 : -1) - target.vx * 0.05;
+                target.avZ = (2.2 + Math.random() * 2.0) * (Math.random() > 0.5 ? 1 : -1) - target.vx * 0.08;
                 state.announceSrc = target.portrait.src;
                 state.announceName = target.portrait.name;
                 showAnnouncement(target.portrait.src);
