@@ -92,16 +92,6 @@
         pointer-events: auto;
         cursor: pointer;
       }
-      #ytBgm {
-        position: fixed;
-        width: 2px;
-        height: 2px;
-        right: 2px;
-        bottom: 2px;
-        opacity: 0.01;
-        pointer-events: none;
-        z-index: 79;
-      }
       #bgmBtn {
         position: fixed;
         right: 12px;
@@ -115,6 +105,16 @@
         background: rgba(20, 28, 44, 0.58);
         box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
         cursor: pointer;
+      }
+      #ytBgm {
+        position: fixed;
+        width: 2px;
+        height: 2px;
+        right: 2px;
+        bottom: 2px;
+        opacity: 0.01;
+        pointer-events: none;
+        z-index: 79;
       }
     </style>
   </head>
@@ -590,10 +590,10 @@
         announceMode: "gameover",
         danmuLanes: [],
         lastDanmuColorIndex: -1,
-        bgmIframeMounted: false,
         bgmRetryCount: 0,
         bgmAutoAttempts: 0,
         bgmAutoTimer: 0,
+        bgmIframeMounted: false,
         cloth: null,
         lastPortraitSet: "",
         lastT: performance.now(),
