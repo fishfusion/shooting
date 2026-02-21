@@ -101,6 +101,20 @@
         opacity: 0;
         pointer-events: none;
       }
+      #bgmBtn {
+        position: fixed;
+        right: 12px;
+        top: 12px;
+        z-index: 80;
+        border: 0;
+        border-radius: 999px;
+        padding: 8px 14px;
+        font: 600 14px/1 "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: rgba(245, 248, 255, 0.92);
+        background: rgba(20, 28, 44, 0.58);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+        cursor: pointer;
+      }
     </style>
   </head>
   <body>
@@ -113,6 +127,7 @@
         <button id="restartBtn" type="button">好的，我一定准时赴约</button>
       </div>
     </div>
+    <button id="bgmBtn" type="button">开启音乐</button>
     <div id="danmuLayer"></div>
     <div id="ytBgm" aria-hidden="true"></div>
     <script>
@@ -121,6 +136,7 @@
       const announce = document.getElementById("announce");
       const announceImg = document.getElementById("announceImg");
       const announceText = document.getElementById("announceText");
+      const bgmBtn = document.getElementById("bgmBtn");
       const danmuLayer = document.getElementById("danmuLayer");
       const ytBgmHost = document.getElementById("ytBgm");
       const restartBtn = document.getElementById("restartBtn");
@@ -682,6 +698,7 @@
               if (window.YT && ev.data === window.YT.PlayerState.PLAYING) {
                 state.bgmStarted = true;
                 state.bgmPendingStart = false;
+                if (bgmBtn) bgmBtn.style.display = "none";
               } else if (
                 window.YT &&
                 (ev.data === window.YT.PlayerState.PAUSED ||
@@ -689,10 +706,12 @@
                   ev.data === window.YT.PlayerState.UNSTARTED)
               ) {
                 state.bgmStarted = false;
+                if (bgmBtn) bgmBtn.style.display = "";
               }
             },
             onError: (_e) => {
               state.bgmStarted = false;
+              if (bgmBtn) bgmBtn.style.display = "";
               console.warn("bgm player error");
             },
           },
@@ -722,11 +741,13 @@
       function tryStartBgm() {
         initBgmPlayer();
         state.bgmPendingStart = true;
+        if (bgmBtn) bgmBtn.textContent = "音乐连接中...";
         if (!state.bgmReady || !state.bgmPlayer) return;
         try {
           state.bgmPlayer.unMute();
           state.bgmPlayer.setVolume(YT_BGM_VOLUME);
           state.bgmPlayer.playVideo();
+          if (bgmBtn && !state.bgmStarted) bgmBtn.textContent = "点我继续开音乐";
         } catch (_err) {}
       }
       function extendInviteLine(baseLine) {
@@ -2418,12 +2439,16 @@
         resize();
         createTargets();
       });
+      bgmBtn.addEventListener("click", () => {
+        tryStartBgm();
+      });
       restartBtn.addEventListener("click", () => {
         tryStartBgm();
         createTargets();
       });
 
       initBgmPlayer();
+      if (bgmBtn) bgmBtn.textContent = "开启音乐";
       resize();
       createTargets();
       requestAnimationFrame(loop);
