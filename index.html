@@ -127,6 +127,15 @@
         pointer-events: auto;
         cursor: pointer;
       }
+      #ytBgm {
+        position: fixed;
+        width: 1px;
+        height: 1px;
+        left: -9999px;
+        top: -9999px;
+        opacity: 0;
+        pointer-events: none;
+      }
     </style>
   </head>
   <body>
@@ -145,6 +154,7 @@
         <p id="tauntText"></p>
       </div>
     </div>
+    <div id="ytBgm" aria-hidden="true"></div>
     <script>
       const canvas = document.getElementById("game");
       const hud = document.getElementById("hud");
@@ -154,6 +164,7 @@
       const taunt = document.getElementById("taunt");
       const tauntImg = document.getElementById("tauntImg");
       const tauntText = document.getElementById("tauntText");
+      const ytBgmHost = document.getElementById("ytBgm");
       const restartBtn = document.getElementById("restartBtn");
       const gl = canvas.getContext("webgl", { antialias: true, alpha: false });
       if (!gl) throw new Error("WebGL not supported");
@@ -431,6 +442,8 @@
       const DEFAULT_INVITE_API = location.hostname.endsWith("github.io")
         ? "https://shooting-git-main-fishfusions-projects.vercel.app/api/invite"
         : "/api/invite";
+      const YT_BGM_VIDEO_ID = "urkZLuELFeQ";
+      const YT_BGM_VOLUME = 38;
       const ORIGINAL_INVITE = "恭喜你，下周六叫上Leo来我家吃烧烤吧。";
       const PHILOSOPHICAL_SEEDS = [
         "人生像火候，要慢慢入味",
@@ -585,6 +598,10 @@
         announceMode: "gameover",
         warningTimer: 0,
         tauntTimer: 0,
+        bgmPlayer: null,
+        bgmReady: false,
+        bgmStarted: false,
+        bgmInit: false,
         cloth: null,
         lastPortraitSet: "",
         lastT: performance.now(),
@@ -605,6 +622,69 @@
       }
       function hasTimePhrase(text) {
         return /(下周[一二三四五六日天末]?|周[一二三四五六日天末]|周末|今晚|明晚|明天|后天|本周|这个周末|下个周末)/.test(text);
+      }
+      function createBgmPlayer() {
+        if (!ytBgmHost || state.bgmPlayer || !window.YT || !window.YT.Player) return;
+        state.bgmPlayer = new window.YT.Player(ytBgmHost, {
+          width: "1",
+          height: "1",
+          videoId: YT_BGM_VIDEO_ID,
+          playerVars: {
+            autoplay: 0,
+            controls: 0,
+            disablekb: 1,
+            playsinline: 1,
+            rel: 0,
+            modestbranding: 1,
+            loop: 1,
+            playlist: YT_BGM_VIDEO_ID,
+            origin: location.origin,
+          },
+          events: {
+            onReady: () => {
+              state.bgmReady = true;
+              try {
+                state.bgmPlayer.setVolume(YT_BGM_VOLUME);
+              } catch (_err) {}
+            },
+            onError: (_e) => {
+              console.warn("bgm player error");
+            },
+          },
+        });
+      }
+      function initBgmPlayer() {
+        if (state.bgmInit) return;
+        state.bgmInit = true;
+        if (window.YT && window.YT.Player) {
+          createBgmPlayer();
+          return;
+        }
+        const prevReady = window.onYouTubeIframeAPIReady;
+        window.onYouTubeIframeAPIReady = () => {
+          if (typeof prevReady === "function") {
+            try {
+              prevReady();
+            } catch (_err) {}
+          }
+          createBgmPlayer();
+        };
+        const tag = document.createElement("script");
+        tag.src = "https://www.youtube.com/iframe_api";
+        tag.async = true;
+        document.head.appendChild(tag);
+      }
+      function tryStartBgm() {
+        if (state.bgmStarted) return;
+        initBgmPlayer();
+        if (!state.bgmReady || !state.bgmPlayer) return;
+        try {
+          state.bgmPlayer.unMute();
+          state.bgmPlayer.setVolume(YT_BGM_VOLUME);
+          const p = state.bgmPlayer.playVideo();
+          if (p && typeof p.catch === "function") p.catch(() => {});
+          state.bgmStarted = true;
+        } catch (_err) {}
       }
       function extendInviteLine(baseLine) {
         const base = String(baseLine || "").trim();
@@ -1349,6 +1429,7 @@
       }
 
       function onDown(e) {
+        tryStartBgm();
         if (isFireLocked()) {
           state.drag.active = false;
           return;
@@ -2319,6 +2400,7 @@
         createTargets();
       });
       restartBtn.addEventListener("click", () => {
+        tryStartBgm();
         if (state.announceMode === "warning") {
           announce.classList.remove("show");
           announce.classList.remove("warning");
@@ -2329,6 +2411,7 @@
         createTargets();
       });
 
+      initBgmPlayer();
       resize();
       createTargets();
       requestAnimationFrame(loop);
