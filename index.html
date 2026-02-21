@@ -518,11 +518,12 @@
       }
 
       function createTargets() {
-        const xs = [-5.8, -3.6, -1.5, 1.1, 3.2, 5.5];
-        const ys = [2.4, 3.1, 3.8, 2.9, 4.3, 3.4];
-        const rs = [0.84, 1.02, 0.78, 1.24, 0.94, 0.9];
-        const speed = [0.85, 1.25, 1.0, 1.55, 0.95, 1.35];
-        const zs = [14, 18, 22, 26, 30, 34];
+        const targetCount = 5;
+        const xs = [-5.4, -2.9, -0.2, 2.4, 5.0];
+        const ys = [2.5, 3.4, 3.0, 4.2, 3.3];
+        const rs = [0.84, 1.02, 0.78, 1.24, 0.94];
+        const speed = [0.85, 1.25, 1.0, 1.55, 0.95];
+        const zs = [14, 19, 24, 29, 34];
         const nearZ = Math.min(...zs);
         const farZ = Math.max(...zs);
 
@@ -539,18 +540,18 @@
         state.preparedInviteLine = "";
         state.invitePrefetching = false;
 
-        let selectedPortraits = shuffled(portraits).slice(0, 6);
+        let selectedPortraits = shuffled(portraits).slice(0, targetCount);
         let sig = selectedPortraits.map((p) => p.file).join("|");
         // 避免“点击确定后看起来没换图”：新一局与上一局至少顺序不同。
         if (state.lastPortraitSet && sig === state.lastPortraitSet) {
           for (let i = 0; i < 6; i++) {
-            selectedPortraits = shuffled(portraits).slice(0, 6);
+            selectedPortraits = shuffled(portraits).slice(0, targetCount);
             sig = selectedPortraits.map((p) => p.file).join("|");
             if (sig !== state.lastPortraitSet) break;
           }
         }
         state.lastPortraitSet = sig;
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < targetCount; i++) {
           const z = zs[i];
           const near01 = (farZ - z) / (farZ - nearZ);
           const maxHp = Math.round(70 + near01 * 90);
