@@ -631,7 +631,7 @@
             const px = clothSetup.xMin + x * dx;
             const pin = y === 0 && rivetCols.has(x);
             const release01 = y / Math.max(1, rows - 1);
-            const py = clothSetup.topY - y * dy;
+            const py = Math.max(clothSetup.groundY, clothSetup.topY - y * dy);
             const pz = pin ? clothSetup.z : clothSetup.z + clothSetup.initialReleaseDepth * release01;
             nodes[x + y * cols] = {
               x: px,
@@ -812,6 +812,8 @@
           if (n.invMass <= 0) continue;
           if (n.y < gy) {
             n.y = gy;
+            // Zero normal velocity on contact to avoid numerical "ground bounce".
+            if (n.py < gy) n.py = gy;
           }
         }
       }
