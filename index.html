@@ -43,6 +43,9 @@
       #announce.show {
         display: flex;
       }
+      #announce.warning {
+        padding-bottom: 8vh;
+      }
       #announceCard {
         background: rgba(12, 18, 30, 0.58);
         border: 1px solid rgba(255, 255, 255, 0.2);
@@ -64,6 +67,18 @@
       #announceCard p {
         margin: 0;
         font: 600 20px/1.35 "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+      #announce.warning #announceCard {
+        background: rgba(12, 18, 30, 0.38);
+        border: 0;
+        box-shadow: none;
+        padding: 12px 14px;
+      }
+      #announce.warning #announceCard img {
+        display: none;
+      }
+      #announce.warning #announceCard p {
+        font: 700 22px/1.2 "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
       }
       #restartBtn {
         margin-top: 14px;
@@ -388,7 +403,7 @@
         maxShots: 3,
         popupCooldownSec: 1.6,
       };
-      const RATE_WARNING_FALLBACK = "这样下去会弹尽粮绝，先稳一下节奏。";
+      const RATE_WARNING_FALLBACK = "省这点弹药，咱穷。";
 
       const state = {
         screenW: 0,
@@ -526,6 +541,8 @@
       }
 
       async function showAnnouncement(src) {
+        clearTimeout(state.warningTimer);
+        announce.classList.remove("warning");
         announceImg.src = src;
         announce.classList.add("show");
         state.announceMode = "gameover";
@@ -554,13 +571,15 @@
         announceImg.src = fallbackPortrait;
         announceText.textContent = line || RATE_WARNING_FALLBACK;
         restartBtn.style.display = "none";
+        announce.classList.add("warning");
         announce.classList.add("show");
         state.warningTimer = setTimeout(() => {
           if (state.announceMode === "warning") {
             announce.classList.remove("show");
+            announce.classList.remove("warning");
             restartBtn.style.display = "";
           }
-        }, 1300);
+        }, 1000);
       }
 
       function primeInviteLine() {
@@ -628,6 +647,7 @@
         state.announceSrc = "";
         state.announceName = "";
         announce.classList.remove("show");
+        announce.classList.remove("warning");
         clearTimeout(state.warningTimer);
         restartBtn.style.display = "";
         state.announceMode = "gameover";
@@ -1111,7 +1131,7 @@
         return { x: x * k, y: y * k };
       }
       function isFireLocked() {
-        return announce.classList.contains("show");
+        return state.gameOver;
       }
 
       function spawnBall(x, y, z, vx, vy, vz) {
@@ -2097,6 +2117,7 @@
       restartBtn.addEventListener("click", () => {
         if (state.announceMode === "warning") {
           announce.classList.remove("show");
+          announce.classList.remove("warning");
           restartBtn.style.display = "";
           state.announceMode = "gameover";
           return;
