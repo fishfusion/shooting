@@ -291,8 +291,9 @@
         cols: 23,
         rows: 47,
         substeps: 4,
-        iterations: 12,
-        damping: 0.035,
+        iterations: 9,
+        damping: 0.006,
+        gravityScale: 2.2,
         stretchCompliance: 0.000001,
         shearCompliance: 0.000003,
         bendCompliance: 0.000012,
@@ -794,7 +795,7 @@
             n.py = n.y;
             n.pz = n.z;
             n.x += vx;
-            n.y += vy + world.gravity * stepDt * stepDt;
+            n.y += vy + world.gravity * clothSetup.gravityScale * stepDt * stepDt;
             n.z += vz;
           }
 
