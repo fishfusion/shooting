@@ -1,9 +1,35 @@
+function setCors(res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
+async function parseBody(req) {
+  if (req.body && typeof req.body === "object") return req.body;
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const raw = Buffer.concat(chunks).toString("utf8").trim();
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
 export default async function handler(req, res) {
+  setCors(res);
   if (req.method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     res.status(204).end();
+    return;
+  }
+
+  if (req.method === "GET") {
+    res.status(200).json({
+      ok: true,
+      service: "invite-proxy",
+      hasOpenAIKey: Boolean(process.env.OPENAI_API_KEY),
+    });
     return;
   }
 
@@ -18,8 +44,9 @@ export default async function handler(req, res) {
     return;
   }
 
-  const input = String((req.body && req.body.input) || "").trim();
-  const lastInviteLine = String((req.body && req.body.lastInviteLine) || "").trim();
+  const body = await parseBody(req);
+  const input = String((body && body.input) || "").trim();
+  const lastInviteLine = String((body && body.lastInviteLine) || "").trim();
   if (!input) {
     res.status(400).json({ error: "input is required" });
     return;
@@ -63,7 +90,6 @@ export default async function handler(req, res) {
       return;
     }
 
-    res.setHeader("Access-Control-Allow-Origin", "*");
     res.status(200).json({ text });
   } catch (err) {
     res.status(500).json({ error: "Proxy runtime error", detail: String(err && err.message ? err.message : err) });

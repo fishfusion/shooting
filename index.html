@@ -384,6 +384,7 @@
 
       async function generatePhilosophicalInviteLine() {
         const apiUrl = localStorage.getItem("OPENAI_PROXY_URL") || DEFAULT_INVITE_API;
+        let lastErr = "";
         for (let attempt = 0; attempt < 5; attempt++) {
           const seed = PHILOSOPHICAL_SEEDS[Math.floor(Math.random() * PHILOSOPHICAL_SEEDS.length)];
           const nonce = `${Date.now().toString(36)}-${attempt}`;
@@ -394,7 +395,11 @@
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ input: prompt, lastInviteLine: state.lastInviteLine || "" }),
             });
-            if (!res.ok) continue;
+            if (!res.ok) {
+              const t = await res.text();
+              lastErr = `HTTP ${res.status} ${t.slice(0, 140)}`;
+              continue;
+            }
             const data = await res.json();
             const text = String(data.text || "").trim();
             if (!text) continue;
@@ -405,10 +410,11 @@
             if (clean === state.lastInviteLine) continue;
             return clean;
           } catch (_err) {
+            lastErr = String(_err && _err.message ? _err.message : _err);
             continue;
           }
         }
-        return "__ERR_PROXY_FAIL__";
+        return `__ERR_PROXY_FAIL__${lastErr ? ":" + lastErr : ""}`;
       }
 
       async function showAnnouncement(src) {
@@ -416,8 +422,9 @@
         announceText.textContent = "正在生成邀请语...";
         announce.classList.add("show");
         const line = await generatePhilosophicalInviteLine();
-        if (line === "__ERR_PROXY_FAIL__") {
-          announceText.textContent = "生成服务不可用，请检查后端代理配置。";
+        if (line.startsWith("__ERR_PROXY_FAIL__")) {
+          const detail = line.split(":").slice(1).join(":").trim();
+          announceText.textContent = detail ? `生成服务不可用：${detail}` : "生成服务不可用，请检查后端代理配置。";
           return;
         }
         state.lastInviteLine = line;
