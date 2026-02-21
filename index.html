@@ -291,20 +291,20 @@
         cols: 23,
         rows: 47,
         substeps: 4,
-        iterations: 9,
+        iterations: 6,
         damping: 0.006,
         gravityScale: 2.2,
-        stretchCompliance: 0.0,
-        shearCompliance: 0.0,
-        bendCompliance: 0.0,
-        tetherCompliance: 0.0,
+        stretchCompliance: 0.00006,
+        shearCompliance: 0.00009,
+        bendCompliance: 0.00022,
+        tetherCompliance: 0.00012,
         groundY: 0.03,
         initialReleaseDepth: 14,
         collisionRestitution: 0.0,
-        collisionTangentDamping: 0.9,
-        collisionSpeedDamping: 0.92,
+        collisionTangentDamping: 0.97,
+        collisionSpeedDamping: 0.98,
         collisionDetachSpeed: 0.0,
-        collisionMaxOutSpeed: 0.12,
+        collisionMaxOutSpeed: 0.0,
         timeStepScale: 1.8,
         ballCcdSubsteps: 6,
         topEdgeSag: 0.9,
@@ -767,14 +767,16 @@
           ball.vy = vny + vty * tangentDamping;
           ball.vz = vnz + vtz * tangentDamping;
 
-          // Heavily clamp outgoing normal component to avoid wall-like rebound.
-          const outVn = ball.vx * nx + ball.vy * ny + ball.vz * nz;
-          if (outVn < 0) {
-            const keepOut = Math.max(outVn, -clothSetup.collisionMaxOutSpeed);
-            const cut = outVn - keepOut;
-            ball.vx -= nx * cut;
-            ball.vy -= ny * cut;
-            ball.vz -= nz * cut;
+          // Optional outgoing cap (kept disabled by default).
+          if (clothSetup.collisionMaxOutSpeed > 0) {
+            const outVn = ball.vx * nx + ball.vy * ny + ball.vz * nz;
+            if (outVn < 0) {
+              const keepOut = Math.max(outVn, -clothSetup.collisionMaxOutSpeed);
+              const cut = outVn - keepOut;
+              ball.vx -= nx * cut;
+              ball.vy -= ny * cut;
+              ball.vz -= nz * cut;
+            }
           }
 
           const penDamp = Math.max(0.9, 1 - maxPen * 0.4);
@@ -920,6 +922,15 @@
         const hx = sx + dx * bestT;
         const hy = sy + dy * bestT;
         const hz = sz + dz * bestT;
+        // Make sure contact normal points from cloth towards ball travel endpoint.
+        const toEndX = ex - hx;
+        const toEndY = ey - hy;
+        const toEndZ = ez - hz;
+        if (toEndX * hitNx + toEndY * hitNy + toEndZ * hitNz < 0) {
+          hitNx = -hitNx;
+          hitNy = -hitNy;
+          hitNz = -hitNz;
+        }
         ball.x = hx + hitNx * (rr + 0.01);
         ball.y = hy + hitNy * (rr + 0.01);
         ball.z = hz + hitNz * (rr + 0.01);
@@ -930,9 +941,9 @@
           ball.vy -= hitNy * vn;
           ball.vz -= hitNz * vn;
         }
-        ball.vx *= 0.94;
-        ball.vy *= 0.94;
-        ball.vz *= 0.94;
+        ball.vx *= 0.99;
+        ball.vy *= 0.99;
+        ball.vz *= 0.99;
       }
 
       function updateCloth(dt) {
