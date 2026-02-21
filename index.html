@@ -468,8 +468,9 @@
       const DEFAULT_INVITE_API = location.hostname.endsWith("github.io")
         ? "https://shooting-git-main-fishfusions-projects.vercel.app/api/invite"
         : "/api/invite";
+      const BGM_AUDIO_URL = "Assets/GRAE.mp3";
       const YT_BGM_VIDEO_ID = "urkZLuELFeQ";
-      const YT_BGM_URL = `https://www.youtube-nocookie.com/embed/${YT_BGM_VIDEO_ID}?autoplay=1&playsinline=1&loop=1&playlist=${YT_BGM_VIDEO_ID}&controls=0&disablekb=1&rel=0&modestbranding=1`;
+      const YT_BGM_URL = `https://www.youtube-nocookie.com/embed/${YT_BGM_VIDEO_ID}?autoplay=1&playsinline=1&loop=1&playlist=${YT_BGM_VIDEO_ID}&controls=0&disablekb=1&rel=0&modestbranding=1&enablejsapi=1`;
       const ORIGINAL_INVITE = "恭喜你，下周六叫上Leo一家来我家吃烧烤吧。";
       const PHILOSOPHICAL_SEEDS = [
         "人生像火候，要慢慢入味",
@@ -744,6 +745,8 @@
         lastDanmuColorIndex: -1,
         bgmRetryCount: 0,
         bgmIframeMounted: false,
+        bgmAudio: null,
+        bgmUsingAudio: false,
         cloth: null,
         lastPortraitSet: "",
         lastT: performance.now(),
@@ -817,9 +820,21 @@
           if (node.parentNode) node.parentNode.removeChild(node);
         }, delay + moveDurationMs + 120);
       }
-      function tryStartBgm(manual) {
+      function ensureBgmAudio() {
+        if (state.bgmAudio) return state.bgmAudio;
+        const audio = new Audio();
+        audio.src = BGM_AUDIO_URL;
+        audio.loop = true;
+        audio.preload = "auto";
+        audio.playsInline = true;
+        audio.setAttribute("playsinline", "");
+        audio.setAttribute("webkit-playsinline", "");
+        audio.volume = 0.72;
+        state.bgmAudio = audio;
+        return audio;
+      }
+      function startYoutubeBgm(isManual) {
         if (!ytBgmHost) return;
-        const isManual = !!manual;
         if (isManual) {
           state.bgmRetryCount += 1;
           if (bgmBtn) bgmBtn.textContent = "音乐开启中...";
@@ -847,8 +862,31 @@
               );
             }
           }
-          if (isManual && bgmBtn) bgmBtn.textContent = "没声音就再点一次";
+          if (isManual && bgmBtn) bgmBtn.textContent = "已切到YouTube音轨";
         } catch (_err) {}
+      }
+      function tryStartBgm(manual) {
+        const isManual = !!manual;
+        const audio = ensureBgmAudio();
+        if (audio) {
+          const playPromise = audio.play();
+          if (playPromise && typeof playPromise.then === "function") {
+            playPromise
+              .then(() => {
+                state.bgmUsingAudio = true;
+                if (bgmBtn) bgmBtn.textContent = "音乐已开启";
+              })
+              .catch(() => {
+                state.bgmUsingAudio = false;
+                startYoutubeBgm(isManual);
+              });
+            return;
+          }
+          state.bgmUsingAudio = true;
+          if (bgmBtn) bgmBtn.textContent = "音乐已开启";
+          return;
+        }
+        startYoutubeBgm(isManual);
       }
       function extendInviteLine(baseLine) {
         const base = String(baseLine || "").trim();
@@ -2656,6 +2694,12 @@
       window.addEventListener("resize", () => {
         resize();
         createTargets();
+      });
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") tryStartBgm(false);
+      });
+      window.addEventListener("pageshow", () => {
+        tryStartBgm(false);
       });
       bgmBtn.addEventListener("click", () => {
         tryStartBgm(true);
