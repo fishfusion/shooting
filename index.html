@@ -432,6 +432,7 @@
         rateWarningPool: [],
         rateWarningRefreshTimer: 0,
         rateWarningLastFetchOk: false,
+        rateWarningBackoffMs: 1200,
         lastRateWarningLine: "",
         recentShotTs: [],
         nextRatePopupTime: 0,
@@ -611,10 +612,12 @@
       function primeRateWarningLine() {
         if (state.rateWarningPrefetching) return;
         if (state.rateWarningPool.length >= RATE_WARNING_POOL_SIZE) return;
+        let gotOpenAI = false;
         state.rateWarningPrefetching = true;
         generateRateWarningLine()
           .then((result) => {
             if (result && result.text && result.fromOpenAI) {
+              gotOpenAI = true;
               state.rateWarningLastFetchOk = true;
               const line = result.text;
               state.preparedRateWarningLine = line;
@@ -627,8 +630,14 @@
           })
           .finally(() => {
             state.rateWarningPrefetching = false;
-            if (state.rateWarningLastFetchOk && state.rateWarningPool.length < RATE_WARNING_POOL_SIZE) {
-              setTimeout(() => primeRateWarningLine(), 40);
+            if (gotOpenAI) {
+              state.rateWarningBackoffMs = 1200;
+            } else {
+              state.rateWarningBackoffMs = Math.min(20000, Math.floor(state.rateWarningBackoffMs * 1.8));
+            }
+            if (state.rateWarningPool.length < RATE_WARNING_POOL_SIZE) {
+              const delay = gotOpenAI ? 700 : state.rateWarningBackoffMs;
+              setTimeout(() => primeRateWarningLine(), delay);
             }
           });
       }
@@ -701,6 +710,7 @@
         state.recentShotTs = [];
         state.preparedRateWarningLine = "";
         state.rateWarningPool = [];
+        state.rateWarningBackoffMs = 1200;
         if (state.rateWarningRefreshTimer) {
           clearInterval(state.rateWarningRefreshTimer);
           state.rateWarningRefreshTimer = 0;
