@@ -404,6 +404,8 @@
         popupCooldownSec: 1.6,
       };
       const RATE_WARNING_FALLBACK = "省这点弹药，咱穷。";
+      const RATE_WARNING_POOL_SIZE = 3;
+      const RATE_WARNING_REFRESH_MS = 9000;
 
       const state = {
         screenW: 0,
@@ -425,6 +427,8 @@
         invitePrefetching: false,
         preparedRateWarningLine: "",
         rateWarningPrefetching: false,
+        rateWarningPool: [],
+        rateWarningRefreshTimer: 0,
         lastRateWarningLine: "",
         recentShotTs: [],
         nextRatePopupTime: 0,
@@ -594,15 +598,30 @@
           });
       }
       function primeRateWarningLine() {
-        if (state.rateWarningPrefetching || state.preparedRateWarningLine) return;
+        if (state.rateWarningPrefetching) return;
+        if (state.rateWarningPool.length >= RATE_WARNING_POOL_SIZE) return;
         state.rateWarningPrefetching = true;
         generateRateWarningLine()
           .then((line) => {
-            if (line) state.preparedRateWarningLine = line;
+            if (line) {
+              state.preparedRateWarningLine = line;
+              const prev = state.rateWarningPool[state.rateWarningPool.length - 1];
+              if (line !== prev) state.rateWarningPool.push(line);
+              while (state.rateWarningPool.length > RATE_WARNING_POOL_SIZE + 1) state.rateWarningPool.shift();
+            }
           })
           .finally(() => {
             state.rateWarningPrefetching = false;
+            if (state.rateWarningPool.length < RATE_WARNING_POOL_SIZE) {
+              setTimeout(() => primeRateWarningLine(), 40);
+            }
           });
+      }
+      function startRateWarningRefresh() {
+        if (state.rateWarningRefreshTimer) clearInterval(state.rateWarningRefreshTimer);
+        state.rateWarningRefreshTimer = setInterval(() => {
+          if (state.rateWarningPool.length < RATE_WARNING_POOL_SIZE + 1) primeRateWarningLine();
+        }, RATE_WARNING_REFRESH_MS);
       }
       function hitFireRateLimit() {
         const now = performance.now() * 0.001;
@@ -611,7 +630,7 @@
         if (state.recentShotTs.length >= FIRE_RATE_LIMIT.maxShots) {
           if (now >= state.nextRatePopupTime) {
             state.nextRatePopupTime = now + FIRE_RATE_LIMIT.popupCooldownSec;
-            const line = state.preparedRateWarningLine || RATE_WARNING_FALLBACK;
+            const line = state.rateWarningPool.shift() || state.preparedRateWarningLine || RATE_WARNING_FALLBACK;
             state.preparedRateWarningLine = "";
             state.lastRateWarningLine = line;
             showRateWarningPopup(line);
@@ -657,6 +676,11 @@
         state.targets = [];
         state.recentShotTs = [];
         state.preparedRateWarningLine = "";
+        state.rateWarningPool = [];
+        if (state.rateWarningRefreshTimer) {
+          clearInterval(state.rateWarningRefreshTimer);
+          state.rateWarningRefreshTimer = 0;
+        }
         state.nextRatePopupTime = 0;
         initCloth();
         state.preparedInviteLine = "";
@@ -711,6 +735,7 @@
         }
         primeInviteLine();
         primeRateWarningLine();
+        startRateWarningRefresh();
       }
 
       function initCloth() {
