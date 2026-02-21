@@ -290,11 +290,13 @@
         topY: 16,
         cols: 23,
         rows: 47,
-        substeps: 2,
-        iterations: 5,
-        damping: 0.02,
-        stretchCompliance: 0.00003,
-        shearCompliance: 0.00009,
+        substeps: 4,
+        iterations: 12,
+        damping: 0.035,
+        stretchCompliance: 0.000001,
+        shearCompliance: 0.000003,
+        bendCompliance: 0.000012,
+        tetherCompliance: 0.0000006,
       };
 
       const cam = {
@@ -624,9 +626,15 @@
             const i = x + y * cols;
             if (x < cols - 1) addConstraint(i, i + 1, clothSetup.stretchCompliance);
             if (y < rows - 1) addConstraint(i, i + cols, clothSetup.stretchCompliance);
+            if (x < cols - 2) addConstraint(i, i + 2, clothSetup.bendCompliance);
+            if (y < rows - 2) addConstraint(i, i + cols * 2, clothSetup.bendCompliance);
             if (x < cols - 1 && y < rows - 1) {
               addConstraint(i, i + cols + 1, clothSetup.shearCompliance);
               addConstraint(i + 1, i + cols, clothSetup.shearCompliance);
+            }
+            if (y > 0) {
+              const top = x;
+              addConstraint(i, top, clothSetup.tetherCompliance);
             }
           }
         }
