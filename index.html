@@ -1527,7 +1527,7 @@
       function addClothMesh(meshArr) {
         const cloth = state.cloth;
         if (!cloth) return;
-        const base = [0.05, 0.11, 0.34, 1.0];
+        const base = [0.34, 0.04, 0.07, 1.0];
         const nodeAt = (x, y) => cloth.nodes[clamp(x, 0, cloth.cols - 1) + clamp(y, 0, cloth.rows - 1) * cloth.cols];
         const nodeNormal = (x, y) => {
           const l = nodeAt(x - 1, y);
@@ -1555,7 +1555,7 @@
             const n01 = nodeNormal(x, y + 1);
             const n11 = nodeNormal(x + 1, y + 1);
 
-            const stripe = 0.92 + 0.08 * Math.sin((x / cloth.cols) * Math.PI * 6);
+            const stripe = 0.9 + 0.1 * Math.sin((x / cloth.cols) * Math.PI * 7);
             const col = [base[0] * stripe, base[1] * stripe, base[2] * stripe, 1];
 
             pushMeshTri(meshArr, p00, n00, col, p01, n01, col, p11, n11, col);
@@ -1667,24 +1667,46 @@
       function addGun(meshArr) {
         const pose = getGunPose();
         const dir = pose.dir;
+        const right = pose.right;
         const up = pose.up;
         const gun = pose.gun;
         const receiverCenter = pose.receiverCenter;
         const barrelCenter = pose.barrelCenter;
         const gripAxis = normalize3(dir.x * 0.2, -0.95, dir.z * 0.2);
         const gripCenter = add3(gun, add3(mul3(dir, -0.2), mul3(up, -0.68)));
+        const metalDark = [0.17, 0.2, 0.27, 1];
+        const metalLight = [0.3, 0.36, 0.45, 1];
+        const accent = [0.46, 0.5, 0.6, 1];
+        const wood = [0.38, 0.24, 0.16, 1];
+        const polymer = [0.11, 0.13, 0.16, 1];
 
-        addPrismMesh(meshArr, receiverCenter, dir, 1.6, 0.52, 0.36, [0.24, 0.3, 0.4, 1]);
-        addPrismMesh(meshArr, barrelCenter, dir, 2.4, 0.26, 0.22, [0.2, 0.25, 0.34, 1]);
-        addPrismMesh(meshArr, gripCenter, gripAxis, 1.25, 0.34, 0.52, [0.36, 0.24, 0.17, 1]);
+        // Receiver and top rail.
+        addPrismMesh(meshArr, receiverCenter, dir, 1.85, 0.56, 0.38, metalDark);
+        addPrismMesh(meshArr, add3(receiverCenter, mul3(up, 0.23)), dir, 1.55, 0.34, 0.08, accent);
 
-        const guardCenter = add3(gun, add3(mul3(dir, 0.1), mul3(up, -0.2)));
-        addPrismMesh(meshArr, guardCenter, dir, 0.56, 0.2, 0.12, [0.15, 0.19, 0.26, 1]);
+        // Barrel assembly + muzzle.
+        addPrismMesh(meshArr, barrelCenter, dir, 2.65, 0.24, 0.2, metalLight);
+        addPrismMesh(meshArr, add3(barrelCenter, mul3(dir, 1.38)), dir, 0.24, 0.3, 0.26, metalDark);
+        addPrismMesh(meshArr, add3(barrelCenter, mul3(dir, 0.45)), dir, 1.0, 0.32, 0.28, polymer);
 
-        const sightBack = add3(receiverCenter, add3(mul3(dir, 0.5), mul3(up, 0.28)));
-        const sightFront = add3(barrelCenter, add3(mul3(dir, 1.0), mul3(up, 0.25)));
-        addPrismMesh(meshArr, sightBack, up, 0.16, 0.08, 0.12, [0.28, 0.34, 0.45, 1]);
-        addPrismMesh(meshArr, sightFront, up, 0.2, 0.08, 0.16, [0.3, 0.36, 0.48, 1]);
+        // Front guard and rear stock block.
+        const guardCenter = add3(gun, add3(mul3(dir, 0.15), mul3(up, -0.2)));
+        addPrismMesh(meshArr, guardCenter, dir, 0.62, 0.22, 0.12, polymer);
+        addPrismMesh(meshArr, add3(receiverCenter, add3(mul3(dir, -1.0), mul3(up, -0.08))), dir, 0.95, 0.46, 0.34, wood);
+
+        // Grip + butt pad.
+        addPrismMesh(meshArr, gripCenter, gripAxis, 1.35, 0.34, 0.56, wood);
+        addPrismMesh(meshArr, add3(gripCenter, mul3(gripAxis, -0.72)), gripAxis, 0.22, 0.4, 0.6, polymer);
+
+        // Sights.
+        const sightBack = add3(receiverCenter, add3(mul3(dir, 0.52), mul3(up, 0.3)));
+        const sightFront = add3(barrelCenter, add3(mul3(dir, 1.06), mul3(up, 0.27)));
+        addPrismMesh(meshArr, sightBack, up, 0.17, 0.08, 0.14, accent);
+        addPrismMesh(meshArr, sightFront, up, 0.22, 0.08, 0.17, accent);
+
+        // Side cheek pieces to thicken silhouette.
+        addPrismMesh(meshArr, add3(receiverCenter, mul3(right, 0.26)), dir, 1.1, 0.08, 0.24, metalDark);
+        addPrismMesh(meshArr, add3(receiverCenter, mul3(right, -0.26)), dir, 1.1, 0.08, 0.24, metalDark);
       }
 
       function toClipX(x) {
